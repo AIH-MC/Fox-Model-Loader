@@ -148,12 +148,17 @@ public class YSMClientMapper {
         }
 
         List<AnimationControllerFile> controllersList = new ArrayList<>();
-        Map<String, AnimationController> controllerMap = buildControllers(raw.mainEntity.animationControllers, raw.properties.mergeMultilineExpr);
-        if (!controllerMap.isEmpty()) {
-            controllersList.add(new AnimationControllerFile(controllerMap));
+        if (raw.mainEntity.animationControllerFiles != null) {
+            for (RawYsmModel.RawAnimationControllerFile file : raw.mainEntity.animationControllerFiles) {
+                Map<String, AnimationController> controllerMap = buildControllers(file.controllers, raw.properties.mergeMultilineExpr);
+                if (!controllerMap.isEmpty()) {
+                    controllersList.add(new AnimationControllerFile(controllerMap));
+                }
+            }
         }
 
         MainModelData mainModelData = new MainModelData(meshes, animations, controllersList.toArray(new AnimationControllerFile[0]), textureMap);
+
         ServerModelInfo modelInfo = buildModelInfo(raw/*, modelId*/);
         ModelExtraResourcesFile extraResources = buildExtraResources(raw);
         ProjectileModelFiles[] extraItemModels = buildExtraItemModels(raw, context, raw.properties.mergeMultilineExpr);
@@ -393,13 +398,7 @@ public class YSMClientMapper {
 
                 List<Pair<String, IValue>> transitions = new ArrayList<>();
                 for (Map.Entry<String, String> e : rs.transitions.entrySet()) {
-                    IValue condition = null;
-                    if (!e.getValue().isEmpty()) {
-                        try {
-                            condition = parse(e.getValue());
-                        } catch (Exception ignore) {
-                        }
-                    }
+                    IValue condition = parse(e.getValue());
                     transitions.add(Pair.of(e.getKey(), condition));
                 }
 
@@ -423,7 +422,12 @@ public class YSMClientMapper {
 
                 states.add(new AnimationState(rs.name, animations.toArray(new Pair[0]), transitions.toArray(new Pair[0]), rs.soundEffects.toArray(new String[0]), onEntry.toArray(new IValue[0]), onExit.toArray(new IValue[0]), blendTransition, rs.blendViaShortestPath));
             }
-            result.put(rac.animationName, new AnimationController("default", states.toArray(new AnimationState[0])));
+            result.put(rac.animationName,
+                    new AnimationController(
+                            rac.initialState.isEmpty() ? "default" : rac.initialState,
+                            states.toArray(new AnimationState[0])
+                    )
+            );
         }
         return result;
     }
@@ -577,7 +581,15 @@ public class YSMClientMapper {
         }
         AnimationFile combinedAnim = new AnimationFile(allAnimations);
 
-        AnimationControllerFile controllers = new AnimationControllerFile(new LinkedHashMap<>()); // 子模型无单独控制器
+        Map<String, AnimationController> controllerMap = new LinkedHashMap<>();
+        if (sub.animationControllerFiles != null) {
+            for (RawYsmModel.RawAnimationControllerFile file : sub.animationControllerFiles) {
+                if (file.controllers != null && !file.controllers.isEmpty()) {
+                    controllerMap.putAll(buildControllers(file.controllers, mergeMultilineExpr));
+                }
+            }
+        }
+        AnimationControllerFile controllers = new AnimationControllerFile(controllerMap);
 
         OuterFileTexture texture = null;
         if (!sub.textures.isEmpty()) {
@@ -600,7 +612,15 @@ public class YSMClientMapper {
         }
         AnimationFile combinedAnim = new AnimationFile(allAnimations);
 
-        AnimationControllerFile controllers = new AnimationControllerFile(new LinkedHashMap<>());
+        Map<String, AnimationController> controllerMap = new LinkedHashMap<>();
+        if (sub.animationControllerFiles != null) {
+            for (RawYsmModel.RawAnimationControllerFile file : sub.animationControllerFiles) {
+                if (file.controllers != null && !file.controllers.isEmpty()) {
+                    controllerMap.putAll(buildControllers(file.controllers, mergeMultilineExpr));
+                }
+            }
+        }
+        AnimationControllerFile controllers = new AnimationControllerFile(controllerMap);
 
         OuterFileTexture texture = null;
         if (!sub.textures.isEmpty()) {

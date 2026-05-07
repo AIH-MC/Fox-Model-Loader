@@ -329,7 +329,7 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
 
     public void initAnimationControllers(@NotNull GeoModel model, Object2ReferenceMap<String, List<IValue>> object2ReferenceMap) {
         reset();
-        this.currentModel = new com.elfmcys.yesstevemodel.geckolib3.geo.animated.AnimatedGeoModel(model);
+        this.currentModel = new AnimatedGeoModel(model);
         this.animationMap = object2ReferenceMap;
         registerAnimationControllers();
         this.animationProcessor.initBones(this.currentModel, object2ReferenceMap);

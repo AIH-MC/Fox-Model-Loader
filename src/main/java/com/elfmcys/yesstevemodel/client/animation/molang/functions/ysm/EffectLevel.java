@@ -20,7 +20,7 @@ public class EffectLevel extends ContextFunction<Entity> {
     }
 
     @Override
-    public java.lang.Object eval(ExecutionContext<IContext<Entity>> context, ArgumentCollection arguments) {
+    public Object eval(ExecutionContext<IContext<Entity>> context, ArgumentCollection arguments) {
         int effects = 0;
 
         for (int i = 0; i < arguments.size(); i++) {

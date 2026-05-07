@@ -9,6 +9,7 @@ import com.elfmcys.yesstevemodel.resource.YSMClientMapper;
 import com.elfmcys.yesstevemodel.resource.YSMFolderDeserializer;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
 import rip.ysm.security.YsmCrypt;
 import rip.ysm.security.YSMByteBuf;
 import com.elfmcys.yesstevemodel.YesSteveModel;
@@ -47,6 +48,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -240,7 +242,7 @@ public final class ServerModelManager {
     private static void extractBuiltinModels() {
         if (Files.isDirectory(BUILT)) {
             try (var s = Files.walk(BUILT)) {
-                s.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                s.sorted(Comparator.reverseOrder()).forEach(p -> {
                     if (!p.equals(BUILT)) try { Files.deleteIfExists(p); } catch (IOException ignored) {}
                 });
             } catch (IOException ignored) {}
@@ -440,45 +442,65 @@ public final class ServerModelManager {
 
     private static void scanDirectoryModels(Path baseDir, Path cacheDir, Map<String, ServerModelData> loaded, Set<String> authIds, Set<String> validCaches, boolean isAuth) {
         if (baseDir == null || !Files.isDirectory(baseDir)) return;
-        try (Stream<Path> stream = Files.walk(baseDir)) {
-            stream.forEach(path -> {
-                String fileName = path.getFileName().toString();
-                try {
-                    if (fileName.equals("ysm.json")) {
-                        Path modelDir = path.getParent();
-                        // 提取相對路徑作為ID
-                        String modelId = baseDir.relativize(modelDir).toString().replace('\\', '/');
 
-                        try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(modelDir)) {
-                            RawYsmModel rawModel = deserializer.deserialize();
-                            ServerModelData data = processAndCacheModel(modelId, rawModel, cacheDir, isAuth, validCaches);
-                            if (data != null) {
-                                loaded.put(modelId, data);
-                                if (isAuth) authIds.add(modelId);
+        try {
+            Files.walkFileTree(baseDir, new SimpleFileVisitor<>() {
+                @Override
+                public @NotNull FileVisitResult preVisitDirectory(@NotNull Path dir, @NotNull BasicFileAttributes attrs) {
+                    if (dir.equals(baseDir)) {
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    try {
+                        if (YSMFolderDeserializer.isModelFolder(dir)) {
+                            String modelId = baseDir.relativize(dir).toString().replace('\\', '/');
+
+                            try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(dir)) {
+                                RawYsmModel rawModel = deserializer.deserialize();
+                                ServerModelData data = processAndCacheModel(modelId, rawModel, cacheDir, isAuth, validCaches);
+                                if (data != null) {
+                                    loaded.put(modelId, data);
+                                    if (isAuth) authIds.add(modelId);
+                                }
+                            } catch (Exception e) {
+                                YesSteveModel.LOGGER.error("Failed to load model at: " + dir, e);
                             }
+
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+                    } catch (Exception e) {
+                        YesSteveModel.LOGGER.error("Error checking directory: " + dir, e);
+                    }
+
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) {
+                    if (file.getFileName().toString().endsWith(".ysm")) {
+                        try {
+                            String relativePath = baseDir.relativize(file).toString().replace('\\', '/');
+                            String modelId = relativePath;
+                            byte[] raw = Files.readAllBytes(file);
+                            byte[] decrypted = YsmCrypt.decryptYsmFile(raw);
+                            try (YSMBinaryDeserializer deserializer = new YSMBinaryDeserializer(decrypted)) {
+                                RawYsmModel rawModel = deserializer.deserializeKeepOpen();
+                                deserializer.parseYSMFooter(rawModel); // 只用于gui展示数据
+                                ServerModelData data = processAndCacheModel(modelId, rawModel, cacheDir, isAuth, validCaches);
+                                if (data != null) {
+                                    loaded.put(modelId, data);
+                                    if (isAuth) authIds.add(modelId);
+                                }
+                            }
+                        } catch (Exception e) {
+                            YesSteveModel.LOGGER.error("Failed to load binary model at: " + file, e);
                         }
                     }
-                    else if (fileName.endsWith(".ysm")) {
-                        String relativePath = baseDir.relativize(path).toString().replace('\\', '/');
-                        String modelId = /*relativePath.substring(0, relativePath.length() - 4)*/relativePath;
-                        byte[] raw = Files.readAllBytes(path);
-                        byte[] decrypted = YsmCrypt.decryptYsmFile(raw);
-                        try (YSMBinaryDeserializer deserializer = new YSMBinaryDeserializer(decrypted)) {
-                            RawYsmModel rawModel = deserializer.deserializeKeepOpen();
-                            deserializer.parseYSMFooter(rawModel); //只用于gui展示数据
-                            ServerModelData data = processAndCacheModel(modelId, rawModel, cacheDir, isAuth, validCaches);
-                            if (data != null) {
-                                loaded.put(modelId, data);
-                                if (isAuth) authIds.add(modelId);
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    YesSteveModel.LOGGER.error("Failed to load model at: " + path, e);
+                    return FileVisitResult.CONTINUE;
                 }
             });
-        } catch (Exception e) {
-            YesSteveModel.LOGGER.error("Failed to walk directory: " + baseDir, e);
+        } catch (IOException e) {
+            YesSteveModel.LOGGER.error("Failed to walk directory tree: " + baseDir, e);
         }
     }
 
@@ -661,8 +683,8 @@ public final class ServerModelManager {
                 outBuf.writeVarLong(hashes[0]);
                 outBuf.writeVarLong(hashes[1]);
                 outBuf.writeString(model.getModelId());
-                outBuf.writeVarInt(model.isCustomSkinModel() ? 1 : 0);
                 outBuf.writeVarInt(model.isAuth() ? 1 : 0);
+                outBuf.writeVarInt(model.isCustomSkinModel() ? 1 : 0);
                 outBuf.writeVarInt(32); // format
             }
 

@@ -14,7 +14,7 @@ public class IconButton extends FlatColorButton {
 
     private final int iconV;
 
-    public IconButton(int x, int y, int width, int height, int iconU, int iconV, Button.OnPress onPress) {
+    public IconButton(int x, int y, int width, int height, int iconU, int iconV, OnPress onPress) {
         super(x, y, width, height, Component.empty(), onPress);
         this.iconU = iconU;
         this.iconV = iconV;

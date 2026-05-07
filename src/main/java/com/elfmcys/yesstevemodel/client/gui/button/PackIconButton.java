@@ -26,7 +26,7 @@ public class PackIconButton extends Button {
 
     private final ModelPackData packData;
 
-    public PackIconButton(int x, int y, int width, int height, ModelPackData packData, Button.OnPress onPress) {
+    public PackIconButton(int x, int y, int width, int height, ModelPackData packData, OnPress onPress) {
         super(x, y, width, height, Component.literal(ModelMetadataPresenter.getLocalizedString(packData, "name", packData.getName())), onPress, DEFAULT_NARRATION);
         this.packData = packData;
     }

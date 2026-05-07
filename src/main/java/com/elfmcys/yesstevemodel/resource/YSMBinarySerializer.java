@@ -72,7 +72,7 @@ public class YSMBinarySerializer {
             writeAnimationFileContent(buf, animFile, format);
         }
 
-        writeAnimationControllers(buf, model.mainEntity.animationControllers, format);
+        writeAnimationControllers(buf, model.mainEntity.animationControllerFiles, format, true);
         writeTextureFiles(buf, model.mainEntity.textures);
 
         List<RawYsmModel.RawGeometry> geoList = new ArrayList<>();
@@ -100,7 +100,9 @@ public class YSMBinarySerializer {
                 buf.writeString(animFile.fileHash != null ? animFile.fileHash : "");
                 writeAnimationFileContent(buf, animFile, format);
             }
-            buf.writeVarInt(0); // separator
+
+            writeAnimationControllers(buf, sub.animationControllerFiles, format, false);
+
             RawYsmModel.RawTexture baseTex = sub.textures.values().iterator().next();
             byte[] baseData = baseTex.data;
             int baseFormat = baseTex.imageFormat;
@@ -258,18 +260,18 @@ public class YSMBinarySerializer {
         }
     }
 
-    private static void writeAnimationControllers(YSMByteBuf buf, Map<String, RawYsmModel.RawAnimationController> controllers, int format) {
-        if (controllers.isEmpty()) {
-            buf.writeVarInt(0);
-            return;
+    private static void writeAnimationControllers(YSMByteBuf buf, List<RawYsmModel.RawAnimationControllerFile> files, int format, boolean writeName) {
+        buf.writeVarInt(files.size());
+
+        for (RawYsmModel.RawAnimationControllerFile file : files) {
+            if (writeName) buf.writeString(file.name != null ? file.name : "");
+            buf.writeString(file.hash != null ? file.hash : "");
+            writeAnimationControllerBody(buf, file.controllers, format);
         }
+    }
 
-        RawYsmModel.RawAnimationController first = controllers.values().iterator().next();
-        buf.writeVarInt(1); // controllerCount
-        buf.writeString(first.name != null ? first.name : "");
-        buf.writeString(first.hash != null ? first.hash : "");
-
-        buf.writeVarInt(controllers.size()); // animationCount
+    private static void writeAnimationControllerBody(YSMByteBuf buf, Map<String, RawYsmModel.RawAnimationController> controllers, int format) {
+        buf.writeVarInt(controllers.size()); // 对应 animationCount
         for (RawYsmModel.RawAnimationController ac : controllers.values()) {
             buf.writeString(ac.animationName);
             buf.writeString(ac.initialState != null ? ac.initialState : "");

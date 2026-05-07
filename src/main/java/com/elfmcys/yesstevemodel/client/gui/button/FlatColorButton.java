@@ -16,7 +16,7 @@ public class FlatColorButton extends Button {
 
     private List<Component> tooltip;
 
-    public FlatColorButton(int x, int y, int width, int height, Component component, Button.OnPress onPress) {
+    public FlatColorButton(int x, int y, int width, int height, Component component, OnPress onPress) {
         super(x, y, width, height, component, onPress, DEFAULT_NARRATION);
         this.selected = false;
     }

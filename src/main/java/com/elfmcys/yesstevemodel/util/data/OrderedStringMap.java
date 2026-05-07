@@ -111,7 +111,7 @@ public class OrderedStringMap<K, V> implements Map<K, V> {
 
     @Override
     @NotNull
-    public Set<Map.Entry<K, V>> entrySet() {
+    public Set<Entry<K, V>> entrySet() {
         return this.arrayMap.entrySet();
     }
 }

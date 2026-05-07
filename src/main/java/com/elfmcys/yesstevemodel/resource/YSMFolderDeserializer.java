@@ -76,14 +76,12 @@ public class YSMFolderDeserializer implements AutoCloseable {
 
     public RawYsmModel deserialize() {
         byte[] ysmJsonBytes = readResource("ysm.json");
-        if (ysmJsonBytes == null) {
-            throw new RuntimeException("Missing ysm.json in the provided source");
-        }
+        if (ysmJsonBytes != null) {  // https://ysm.cfpa.team/wiki/struct/#%E6%96%87%E4%BB%B6%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84
+            String jsonStr = new String(ysmJsonBytes, StandardCharsets.UTF_8);
+            JsonObject ysmJson = JsonParser.parseString(jsonStr).getAsJsonObject();
+            parseYsmJson(ysmJson);
+        } else parseLegacyFormat();
 
-        String jsonStr = new String(ysmJsonBytes, StandardCharsets.UTF_8);
-        JsonObject ysmJson = JsonParser.parseString(jsonStr).getAsJsonObject();
-
-        parseYsmJson(ysmJson);
         parseGlobalResources();
 
         this.finalFolderHash = calculateFinalFolderHash();
@@ -345,10 +343,15 @@ public class YSMFolderDeserializer implements AutoCloseable {
         }
         if (playerObj.has("animation_controllers") && playerObj.get("animation_controllers").isJsonArray()) {
             for (JsonElement acElem : playerObj.getAsJsonArray("animation_controllers")) {
-                byte[] acData = readResource(acElem.getAsString());
+                String acPath = acElem.getAsString();
+                byte[] acData = readResource(acPath);
                 if (acData != null) {
                     String acHash = DigestUtils.sha256Hex(acData);
-                    parseAnimationControllers(acData, acHash, model.mainEntity.animationControllers);
+                    RawYsmModel.RawAnimationControllerFile acFile = new RawYsmModel.RawAnimationControllerFile();
+                    acFile.name = extractFileName(acPath);
+                    acFile.hash = acHash;
+                    parseAnimationControllers(acData, acFile.controllers);
+                    model.mainEntity.animationControllerFiles.add(acFile);
                 }
             }
         }
@@ -420,6 +423,19 @@ public class YSMFolderDeserializer implements AutoCloseable {
                     raf.fileHash = DigestUtils.sha256Hex(animData);
                     raf.animType = getAnimTypeFromKey("extra");
                     sub.animationFiles.put("sub_anim", raf);
+                }
+            }
+
+            if (item.has("controller")) {
+                String acPath = item.get("controller").getAsString();
+                byte[] acData = readResource(acPath);
+                if (acData != null) {
+                    String acHash = DigestUtils.sha256Hex(acData);
+                    RawYsmModel.RawAnimationControllerFile acFile = new RawYsmModel.RawAnimationControllerFile();
+                    acFile.name = extractFileName(acPath);
+                    acFile.hash = acHash;
+                    parseAnimationControllers(acData, acFile.controllers);
+                    sub.animationControllerFiles.add(acFile);
                 }
             }
 
@@ -760,7 +776,7 @@ public class YSMFolderDeserializer implements AutoCloseable {
         return arr;
     }
 
-    private void parseAnimationControllers(byte[] data, String fileHash, Map<String, RawYsmModel.RawAnimationController> targetMap) {
+    private void parseAnimationControllers(byte[] data, Map<String, RawYsmModel.RawAnimationController> targetMap) {
         String json = new String(data, StandardCharsets.UTF_8);
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
 
@@ -774,8 +790,6 @@ public class YSMFolderDeserializer implements AutoCloseable {
             RawYsmModel.RawAnimationController ac = new RawYsmModel.RawAnimationController();
             ac.animationName = acEntry.getKey();
             ac.initialState = getStr(acObj, "initial_state", "");
-
-            ac.hash = fileHash;
 
             if (acObj.has("states") && acObj.get("states").isJsonObject()) {
                 JsonObject statesObj = acObj.getAsJsonObject("states");
@@ -1025,5 +1039,153 @@ public class YSMFolderDeserializer implements AutoCloseable {
 
     public String getFolderHash() {
         return finalFolderHash;
+    }
+
+    private void parseLegacyFormat() {
+        byte[] mainData = readResource("main.json");
+        byte[] armData = readResource("arm.json");
+
+        if (mainData == null) {
+            throw new RuntimeException("Legacy model missing main.json");
+        } else if (armData == null) {
+            throw new RuntimeException("Legacy model missing arm.json");
+        }
+
+        List<String> pngFiles = new ArrayList<>();
+        try (Stream<Path> stream = Files.list(rootPath)) {
+            stream.filter(Files::isRegularFile).forEach(path -> {
+                String fileName = path.getFileName().toString();
+                if (fileName.endsWith(".png")) {
+                    pngFiles.add(fileName);
+                }
+            });
+        } catch (IOException e) { e.printStackTrace(); }
+
+        boolean hasMainTexture = false;
+        for (String texName : pngFiles) {
+            if (!texName.equals("arrow.png")) {
+                hasMainTexture = true;
+                break;
+            }
+        }
+
+        if (!hasMainTexture) {
+            throw new RuntimeException("Legacy model requires at least one texture.");
+        }
+
+        byte[] arrowData = readResource("arrow.json");
+        if (arrowData != null && !pngFiles.contains("arrow.png")) {
+            throw new RuntimeException("arrow.json is present but arrow.png is missing.");
+        }
+
+        // 这个可能不存在
+        byte[] infoData = readResource("info.json");
+        if (infoData != null) {
+            try {
+                JsonObject infoObj = JsonParser.parseString(new String(infoData, StandardCharsets.UTF_8)).getAsJsonObject();
+                model.metadata.name = getStr(infoObj, "name", "");
+                model.metadata.tips = getStr(infoObj, "tips", "");
+                model.metadata.licenseDescription = getStr(infoObj, "license", "");
+                model.properties.isFree = getBool(infoObj, "free", false);
+
+                if (infoObj.has("authors") && infoObj.get("authors").isJsonArray()) {
+                    for (JsonElement e : infoObj.getAsJsonArray("authors")) {
+                        RawYsmModel.RawMetadata.Author author = new RawYsmModel.RawMetadata.Author();
+                        author.name = e.getAsString();
+                        model.metadata.authors.add(author);
+                    }
+                }
+
+                if (infoObj.has("extra_animation_names") && infoObj.get("extra_animation_names").isJsonArray()) {
+                    JsonArray extras = infoObj.getAsJsonArray("extra_animation_names");
+                    for (int i = 0; i < extras.size(); i++) {
+                        String extraName = extras.get(i).getAsString();
+                        model.properties.extraAnimations.put("extra" + i, extraName);
+
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to parse info.json");
+                e.printStackTrace();;
+            }
+        }
+
+        model.mainEntity.mainModel = parseGeometry(mainData, 1);
+        model.mainEntity.armModel = parseGeometry(armData, 2);
+
+        for (String texName : pngFiles) {
+            if (texName.equals("arrow.png")) continue;
+            byte[] texData = readResource(texName);
+            if (texData != null) {
+                ImageMeta meta = parseImageMeta(texData, texName);
+                RawYsmModel.RawTexture rt = new RawYsmModel.RawTexture();
+                rt.hash = DigestUtils.sha256Hex(texData);
+                rt.width = meta.width();
+                rt.height = meta.height();
+                rt.imageFormat = meta.format();
+                rt.name = extractFileName(texName);
+                rt.data = texData;
+                rt.unknownFlag = 1;
+                model.mainEntity.textures.put(rt.name, rt);
+            }
+        }
+
+        if (!model.mainEntity.textures.isEmpty()) {
+            model.properties.defaultTexture = model.mainEntity.textures.keySet().iterator().next();
+        }
+
+        String[] animFiles = {"main.animation.json", "arm.animation.json", "extra.animation.json", "tac.animation.json", "carryon.animation.json", "slashblade.animation.json", "tlm.animation.json"};
+        for (String fileName : animFiles) {
+            byte[] animData = readResource(fileName);
+            if (animData != null) {
+                RawYsmModel.RawAnimationFile raf = parseAnimations(animData);
+                raf.fileHash = DigestUtils.sha256Hex(animData);
+
+                String animKey = fileName.substring(0, fileName.length() - ".animation.json".length());
+                raf.animType = getAnimTypeFromKey(animKey);
+                model.mainEntity.animationFiles.put(animKey, raf);
+            }
+        }
+
+        // 箭矢
+        if (arrowData != null) {
+            RawYsmModel.RawSubEntity arrowSub = new RawYsmModel.RawSubEntity();
+            arrowSub.identifier = "arrow";
+            arrowSub.model = parseGeometry(arrowData, 3);
+
+            byte[] arrowTexData = readResource("arrow.png");
+            if (arrowTexData != null) {
+                ImageMeta meta = parseImageMeta(arrowTexData, "arrow.png");
+                RawYsmModel.RawTexture rt = new RawYsmModel.RawTexture();
+                rt.hash = DigestUtils.sha256Hex(arrowTexData);
+                rt.width = meta.width();
+                rt.height = meta.height();
+                rt.imageFormat = meta.format();
+                rt.name = "arrow";
+                rt.data = arrowTexData;
+                rt.unknownFlag = 1;
+                arrowSub.textures.put(rt.name, rt);
+            }
+
+            byte[] arrowAnimData = readResource("arrow.animation.json");
+            if (arrowAnimData != null) {
+                RawYsmModel.RawAnimationFile raf = parseAnimations(arrowAnimData);
+                raf.fileHash = DigestUtils.sha256Hex(arrowAnimData);
+                raf.animType = getAnimTypeFromKey("arrow");
+                arrowSub.animationFiles.put("sub_anim", raf);
+            }
+
+            model.projectiles.put("arrow", arrowSub);
+        }
+    }
+
+    public static boolean isModelFolder(Path dir) {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return false;
+        }
+        if (Files.isRegularFile(dir.resolve("ysm.json"))) {
+            return true;
+        }
+        return Files.isRegularFile(dir.resolve("main.json")) && Files.isRegularFile(dir.resolve("arm.json"));
     }
 }

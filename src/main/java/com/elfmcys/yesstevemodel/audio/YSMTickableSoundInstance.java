@@ -43,7 +43,7 @@ public class YSMTickableSoundInstance extends AbstractTickableSoundInstance impl
     }
 
     public void stopSound() {
-        this.attenuation = SoundInstance.Attenuation.NONE;
+        this.attenuation = Attenuation.NONE;
         this.relative = true;
     }
 
