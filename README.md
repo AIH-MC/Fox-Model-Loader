@@ -10,6 +10,7 @@
 本项目基于上游项目 OpenYSM 进行迁移：
 
 - **上游源码**: [https://gitgud.io/NoSteveModel/OpenYSM](https://gitgud.io/NoSteveModel/OpenYSM)
+想要更快地反馈，加入QQ群：1104823534
 
 ## 关于 YSM 与 OpenYSM
 
