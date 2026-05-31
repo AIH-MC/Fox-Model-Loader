@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
 import com.elfmcys.yesstevemodel.client.upload.ModelImportFilePicker;
 import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
@@ -15,16 +16,31 @@ import net.minecraft.network.chat.MutableComponent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 public class ModelUploadScreen extends Screen implements ModelUploadSession.Listener {
+    private static final long MODEL_FOLDER_POLL_INTERVAL_MS = 1000L;
+    private static final long MODEL_FOLDER_POLL_WINDOW_MS = 60000L;
+    private static final Pattern INVALID_MODEL_ID_CHARS = Pattern.compile("[^a-z0-9_./-]+");
     private final Screen parentScreen;
     private final Queue<ModelImportFilePicker.PickedFile> pendingImports = new ArrayDeque<>();
     private long lastFlashTime = 0L;
     private Component error = Component.empty();
+    private Component localStatus = Component.empty();
+    private ChatFormatting localStatusColor = ChatFormatting.GRAY;
+    private Component serverStatus = Component.empty();
+    private ChatFormatting serverStatusColor = ChatFormatting.GRAY;
+    private boolean localImportInProgress;
+    private boolean modelFolderReloadInProgress;
+    private long modelFolderPollUntilMs;
+    private long nextModelFolderPollMs;
+    private long lastModelFolderStamp = Long.MIN_VALUE;
     private float displayedProgress = 0f;
     private float prevProgressTarget = -1f;
 
@@ -59,6 +75,15 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
 
     @Override
     public void onSessionUpdate(ModelUploadSession session) {
+        if (session == null) {
+            return;
+        }
+        this.serverStatus = session.getMessage();
+        this.serverStatusColor = switch (session.getState()) {
+            case COMPLETED -> ChatFormatting.GREEN;
+            case FAILED -> ChatFormatting.RED;
+            default -> ChatFormatting.YELLOW;
+        };
     }
 
     @Override
@@ -76,6 +101,8 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
 
     private void openFilePicker() {
         this.error = Component.empty();
+        this.localStatus = Component.empty();
+        this.serverStatus = Component.empty();
         this.lastFlashTime = PlatformUtil.getMillis();
         Component err = ModelImportFilePicker.pickYsmFile();
         if (err != null) {
@@ -114,23 +141,52 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
             return false;
         }
         String stem = stripImportExtension(fileName);
-        String modelId = stem.toLowerCase(Locale.ROOT);
+        String modelId = normalizeModelId(stem);
         if (modelId.isEmpty()) {
             this.error = Component.translatable("gui.yes_steve_model.import.error.model_id_from_filename", stem);
             return false;
         }
-        Component err = ModelUploadSession.start(modelId, fileName, file.data());
-        if (err != null) {
-            this.error = err;
-            return false;
-        }
+        this.localImportInProgress = true;
+        this.localStatus = Component.translatable("gui.yes_steve_model.import.state.local_importing", modelId);
+        this.localStatusColor = ChatFormatting.YELLOW;
+        this.serverStatus = Component.translatable("gui.yes_steve_model.import.state.server_waiting");
+        this.serverStatusColor = ChatFormatting.GRAY;
+        ClientModelManager.importLocalModel(modelId, fileName, file.data(), localError -> onLocalImportFinished(modelId, fileName, file.data(), localError));
         return true;
+    }
+
+    private void onLocalImportFinished(String modelId, String fileName, byte[] data, Component localError) {
+        this.localImportInProgress = false;
+        if (localError != null) {
+            this.localStatus = localError;
+            this.localStatusColor = ChatFormatting.RED;
+            this.serverStatus = Component.translatable("gui.yes_steve_model.import.state.server_skipped");
+            this.serverStatusColor = ChatFormatting.GRAY;
+            this.error = localError;
+            return;
+        }
+        this.localStatus = Component.translatable("gui.yes_steve_model.import.state.local_imported_as", modelId);
+        this.localStatusColor = ChatFormatting.GREEN;
+
+        Component uploadError = ModelUploadSession.start(modelId, fileName, data);
+        if (uploadError != null) {
+            this.serverStatus = Component.translatable("gui.yes_steve_model.import.state.server_upload_failed", uploadError);
+            this.serverStatusColor = ChatFormatting.RED;
+            return;
+        }
+        this.serverStatus = Component.translatable("gui.yes_steve_model.import.state.server_uploading");
+        this.serverStatusColor = ChatFormatting.YELLOW;
     }
 
     private void openModelFolder() {
         try {
             Files.createDirectories(ServerModelManager.CUSTOM);
             PlatformUtil.openFile(ServerModelManager.CUSTOM.toFile());
+            this.lastModelFolderStamp = modelFolderStamp(ServerModelManager.CUSTOM);
+            this.modelFolderPollUntilMs = PlatformUtil.getMillis() + MODEL_FOLDER_POLL_WINDOW_MS;
+            this.nextModelFolderPollMs = 0L;
+            this.localStatus = Component.translatable("gui.yes_steve_model.import.state.folder_polling");
+            this.localStatusColor = ChatFormatting.GRAY;
         } catch (IOException e) {
             this.error = Component.translatable("gui.yes_steve_model.import.error.open_folder", e.getMessage());
         }
@@ -146,7 +202,22 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
         return fileName;
     }
 
+    private static String normalizeModelId(String text) {
+        String normalized = text == null ? "" : text.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
+        while (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        normalized = INVALID_MODEL_ID_CHARS.matcher(normalized).replaceAll("_").replaceAll("/+", "/");
+        while (normalized.contains("..")) {
+            normalized = normalized.replace("..", ".");
+        }
+        return stripImportExtension(normalized);
+    }
+
     private void startNextImportIfIdle() {
+        if (this.localImportInProgress) {
+            return;
+        }
         ModelUploadSession existing = ModelUploadSession.getInstance();
         if (existing != null && !existing.isTerminal()) {
             return;
@@ -157,12 +228,73 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
         }
     }
 
+    private void pollModelFolderReload() {
+        if (this.modelFolderPollUntilMs <= 0L || this.modelFolderReloadInProgress) {
+            return;
+        }
+        long now = PlatformUtil.getMillis();
+        if (now > this.modelFolderPollUntilMs) {
+            this.modelFolderPollUntilMs = 0L;
+            if (this.localStatus.getString().isEmpty() || this.localStatusColor == ChatFormatting.GRAY) {
+                this.localStatus = Component.empty();
+            }
+            return;
+        }
+        if (now < this.nextModelFolderPollMs) {
+            return;
+        }
+        this.nextModelFolderPollMs = now + MODEL_FOLDER_POLL_INTERVAL_MS;
+        long stamp;
+        try {
+            stamp = modelFolderStamp(ServerModelManager.CUSTOM);
+        } catch (IOException e) {
+            this.modelFolderPollUntilMs = 0L;
+            this.error = Component.translatable("gui.yes_steve_model.import.error.local_reload_failed", e.getMessage());
+            return;
+        }
+        if (stamp == this.lastModelFolderStamp) {
+            return;
+        }
+        this.lastModelFolderStamp = stamp;
+        this.modelFolderReloadInProgress = true;
+        this.localStatus = Component.translatable("gui.yes_steve_model.import.state.folder_reloading");
+        this.localStatusColor = ChatFormatting.YELLOW;
+        ClientModelManager.reloadLocalModels(reloadError -> {
+            this.modelFolderReloadInProgress = false;
+            if (reloadError != null) {
+                this.localStatus = reloadError;
+                this.localStatusColor = ChatFormatting.RED;
+                this.error = reloadError;
+                return;
+            }
+            this.localStatus = Component.translatable("gui.yes_steve_model.import.state.folder_reloaded");
+            this.localStatusColor = ChatFormatting.GREEN;
+        });
+    }
+
+    private static long modelFolderStamp(Path root) throws IOException {
+        if (root == null || !Files.isDirectory(root)) {
+            return 0L;
+        }
+        long result = 1125899906842597L;
+        try (Stream<Path> stream = Files.walk(root, 6)) {
+            for (Path path : stream.toList()) {
+                BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
+                result = result * 31 + root.relativize(path).toString().hashCode();
+                result = result * 31 + attrs.lastModifiedTime().toMillis();
+                result = result * 31 + attrs.size();
+            }
+        }
+        return result;
+    }
+
     @Override
     public void tick() {
         ModelImportFilePicker.PickedFile pickedFile;
         while ((pickedFile = ModelImportFilePicker.pollCompleted()) != null) {
             this.pendingImports.add(pickedFile);
         }
+        pollModelFolderReload();
         startNextImportIfIdle();
         Component pickerError = ModelImportFilePicker.consumeLastError();
         if (!pickerError.getString().isEmpty()) {
@@ -202,7 +334,25 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
             g.text(this.font, err, (this.width - w) / 2, this.height - 60, 0xFFFFFFFF);
         }
 
+        renderImportStatusLines(g);
+
         super.extractRenderState(extractor, mouseX, mouseY, partialTick);
+    }
+
+    private void renderImportStatusLines(GuiGraphicsExtractor guiGraphics) {
+        int cx = this.width / 2;
+        int y = this.height - 38;
+        if (!this.localStatus.getString().isEmpty()) {
+            Component line = Component.translatable("gui.yes_steve_model.import.status.local", this.localStatus).copy().withStyle(this.localStatusColor);
+            int w = this.font.width(line);
+            guiGraphics.text(this.font, line, cx - w / 2, y, 0xFFFFFFFF);
+            y += 12;
+        }
+        if (!this.serverStatus.getString().isEmpty()) {
+            Component line = Component.translatable("gui.yes_steve_model.import.status.server", this.serverStatus).copy().withStyle(this.serverStatusColor);
+            int w = this.font.width(line);
+            guiGraphics.text(this.font, line, cx - w / 2, y, 0xFFFFFFFF);
+        }
     }
 
     private void renderEmptyState(GuiGraphicsExtractor guiGraphics) {

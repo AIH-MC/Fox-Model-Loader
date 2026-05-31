@@ -38,16 +38,19 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.message.StringFormattedMessage;
 import org.jetbrains.annotations.Nullable;
+import rip.ysm.legacy.YesModelUtils;
 import rip.ysm.security.YSMByteBuf;
 import rip.ysm.security.YSMClientCache;
 import rip.ysm.security.YsmCrypt;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,6 +87,7 @@ public class ClientModelManager {
 
     private static final ConcurrentLinkedQueue<Pair<ModelAssembly, String>> pendingModelQueue = new ConcurrentLinkedQueue<>();
     private static final WeakHashMap<IGuiWidget, Object> guiWidgets = new WeakHashMap<>();
+    private static final Set<String> localOnlyModelIds = ConcurrentHashMap.newKeySet();
     private static final SyncStatus syncState = new SyncStatus();
     private static volatile boolean isOysmServer = false;
     private static volatile boolean allowUpload = false;
@@ -535,6 +539,7 @@ public class ClientModelManager {
         modelPackMap = new Object2ReferenceOpenHashMap<>();
         pendingModelCallback = null;
         pendingModelQueue.clear();
+        localOnlyModelIds.clear();
 
         forEachGuiWidget(l -> {
             try {
@@ -559,6 +564,52 @@ public class ClientModelManager {
 
     public static Optional<ModelAssembly> getModelContext(String str) {
         return Optional.ofNullable(modelAssemblyMap.get(str));
+    }
+
+    public static boolean isLocalOnlyModel(String modelId) {
+        return modelId != null && localOnlyModelIds.contains(modelId);
+    }
+
+    public static void importLocalModel(String modelId, String fileName, byte[] data, @Nullable Consumer<Component> callback) {
+        modelPhraseExecutor.submit(() -> {
+            Component error = null;
+            try {
+                RawYsmModel rawModel = parseImportModel(fileName, data);
+                ClientModelInfo parsedBundle = YSMClientMapper.buildParsedBundle(rawModel, modelId);
+                localOnlyModelIds.add(modelId);
+                runPendingModelCallback();
+                if (!processModelData(parsedBundle, modelId, false, false)) {
+                    localOnlyModelIds.remove(modelId);
+                    throw new IllegalStateException("Failed to build local model");
+                }
+                YesSteveModel.LOGGER.info("[YSM] Imported local model: {}", modelId);
+            } catch (Exception e) {
+                YesSteveModel.LOGGER.error("[YSM] Failed to import local model: {}", modelId, e);
+                error = Component.translatable("gui.yes_steve_model.import.error.local_import_failed", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            }
+            if (callback != null) {
+                Component result = error;
+                ((Executor) Minecraft.getInstance()).execute(() -> callback.accept(result));
+            }
+        });
+    }
+
+    public static void reloadLocalModels(@Nullable Consumer<Component> callback) {
+        modelPhraseExecutor.submit(() -> {
+            Component error = null;
+            try {
+                loadDirectoryModels(ServerModelManager.BUILT);
+                loadDirectoryModels(ServerModelManager.CUSTOM);
+                loadDirectoryModels(ServerModelManager.AUTH);
+            } catch (Exception e) {
+                YesSteveModel.LOGGER.error("[YSM] Failed to reload local model folders", e);
+                error = Component.translatable("gui.yes_steve_model.import.error.local_reload_failed", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            }
+            if (callback != null) {
+                Component result = error;
+                ((Executor) Minecraft.getInstance()).execute(() -> callback.accept(result));
+            }
+        });
     }
 
     public static ModelAssembly getLocalModelContext() {
@@ -719,6 +770,9 @@ public class ClientModelManager {
             if (removedModelIds != null) {
                 ArrayList<ModelAssembly> removed = new ArrayList<>(removedModelIds.length);
                 for (String str : removedModelIds) {
+                    if (localOnlyModelIds.contains(str)) {
+                        continue;
+                    }
                     ModelAssembly assembly = map.remove(str);
                     if (assembly != null) {
                         removed.add(assembly);
@@ -744,6 +798,7 @@ public class ClientModelManager {
             if (previousModelIds != null) {
                 ModelAssembly[] modelAssemblies = new ModelAssembly[previousModelIds.length];
                 for (int i = 0; i < previousModelIds.length; i++) {
+                    localOnlyModelIds.remove(previousModelIds[i]);
                     modelAssemblies[i] = map.remove(previousModelIds[i]);
                 }
                 for (int i = 0; i < modelAssemblies.length; i++) {
@@ -769,9 +824,137 @@ public class ClientModelManager {
                 processModelData(parsedBundle, modelId, true, false);
             };
         } else {
+            localOnlyModelIds.remove(modelId);
             runPendingModelCallback();
             processModelData(parsedBundle, modelId, false, isAuth);
         }
+    }
+
+    private static RawYsmModel parseImportModel(String fileName, byte[] data) throws Exception {
+        String lower = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".ysm")) {
+            return parseYsmImport(data, fileName);
+        }
+        if (lower.endsWith(".zip")) {
+            return parseZipImport(data);
+        }
+        if (lower.endsWith(".7z")) {
+            throw new UnsupportedOperationException("7z import is not supported yet");
+        }
+        throw new IllegalArgumentException("Unsupported model import type: " + fileName);
+    }
+
+    private static RawYsmModel parseYsmImport(byte[] data, String source) throws Exception {
+        int ysmCryptoVersion = YesModelUtils.getYsmCryptoVersion(data);
+        if (ysmCryptoVersion == 1 || ysmCryptoVersion == 2) {
+            try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(YesModelUtils.input(data))) {
+                return deserializer.deserialize();
+            }
+        }
+        try {
+            byte[] decrypted = YsmCrypt.decryptYsmFile(data);
+            try (YSMBinaryDeserializer deserializer = new YSMBinaryDeserializer(decrypted)) {
+                RawYsmModel rawModel = deserializer.deserializeKeepOpen();
+                deserializer.parseYSMFooter(rawModel);
+                return rawModel;
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid YSM model: " + source, e);
+        }
+    }
+
+    private static RawYsmModel parseZipImport(byte[] data) throws Exception {
+        Path temp = Files.createTempFile("ysm-local-import-", ".zip");
+        try {
+            Files.write(temp, data);
+            try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(temp)) {
+                return deserializer.deserialize();
+            }
+        } finally {
+            try {
+                Files.deleteIfExists(temp);
+            } catch (IOException e) {
+                YesSteveModel.LOGGER.warn("[YSM] Failed to remove temporary local import archive {}", temp, e);
+            }
+        }
+    }
+
+    private static boolean loadDirectoryModels(Path baseDir) throws IOException {
+        if (baseDir == null || !Files.isDirectory(baseDir)) {
+            return false;
+        }
+        boolean[] loadedAny = new boolean[]{false};
+        Files.walkFileTree(baseDir, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                if (dir.equals(baseDir)) {
+                    return FileVisitResult.CONTINUE;
+                }
+                try {
+                    if (YSMFolderDeserializer.isModelFolder(dir)) {
+                        String modelId = normalizeLocalModelId(baseDir.relativize(dir).toString());
+                        loadLocalModelFolder(modelId, dir);
+                        loadedAny[0] = true;
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                } catch (Exception e) {
+                    YesSteveModel.LOGGER.error("[YSM] Failed to load local model folder: {}", dir, e);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                String fileName = file.getFileName() == null ? "" : file.getFileName().toString();
+                String lower = fileName.toLowerCase(Locale.ROOT);
+                if (!lower.endsWith(".ysm") && !lower.endsWith(".zip")) {
+                    return FileVisitResult.CONTINUE;
+                }
+                try {
+                    String modelId = stripImportExtension(normalizeLocalModelId(baseDir.relativize(file).toString()));
+                    RawYsmModel rawModel = parseImportModel(fileName, Files.readAllBytes(file));
+                    loadLocalModel(modelId, rawModel);
+                    loadedAny[0] = true;
+                } catch (Exception e) {
+                    YesSteveModel.LOGGER.error("[YSM] Failed to load local model file: {}", file, e);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return loadedAny[0];
+    }
+
+    private static void loadLocalModelFolder(String modelId, Path dir) throws Exception {
+        try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(dir)) {
+            loadLocalModel(modelId, deserializer.deserialize());
+        }
+    }
+
+    private static void loadLocalModel(String modelId, RawYsmModel rawModel) throws Exception {
+        if (modelId == null || modelId.isBlank()) {
+            return;
+        }
+        ClientModelInfo parsedBundle = YSMClientMapper.buildParsedBundle(rawModel, modelId);
+        localOnlyModelIds.add(modelId);
+        runPendingModelCallback();
+        if (!processModelData(parsedBundle, modelId, false, false)) {
+            localOnlyModelIds.remove(modelId);
+            throw new IllegalStateException("Failed to build local model");
+        }
+    }
+
+    private static String stripImportExtension(String modelId) {
+        String lower = modelId.toLowerCase(Locale.ROOT);
+        for (String extension : new String[]{".ysm", ".zip", ".7z"}) {
+            if (lower.endsWith(extension)) {
+                return modelId.substring(0, modelId.length() - extension.length());
+            }
+        }
+        return modelId;
+    }
+
+    private static String normalizeLocalModelId(String modelId) {
+        return stripImportExtension(modelId.replace('\\', '/').toLowerCase(Locale.ROOT).replaceAll("/+", "/"));
     }
 
     public static void runPendingModelCallback() {
@@ -787,7 +970,7 @@ public class ClientModelManager {
         }
     }
 
-    public static void processModelData(@Nullable ClientModelInfo parsedBundle, String modelId, boolean isPrimary, boolean isAuth) {
+    public static boolean processModelData(@Nullable ClientModelInfo parsedBundle, String modelId, boolean isPrimary, boolean isAuth) {
         if (parsedBundle != null) {
             try {
                 ModelAssembly runtimeModel = ModelAssemblyFactory.buildAssembly(parsedBundle, isPrimary, isAuth);
@@ -798,13 +981,13 @@ public class ClientModelManager {
                     ((Executor) Minecraft.getInstance()).execute(() -> {
                         defaultTexture = UploadManager.getOrCreateLocatable(runtimeModel.getAnimationBundle().getTextures().getValueAt(0), true);
                     });
-                    return;
+                    return true;
                 }
             } catch (Exception e) {
                 if (isPrimary) throw e;
                 YesSteveModel.LOGGER.error(
                         new StringFormattedMessage("Failed to process {}", modelId), e);
-                return;
+                return false;
             }
         }
         ((Executor) Minecraft.getInstance()).execute(() -> {
@@ -819,6 +1002,7 @@ public class ClientModelManager {
                 });
             }
         });
+        return parsedBundle != null;
     }
 
     private static void onSyncComplete() {

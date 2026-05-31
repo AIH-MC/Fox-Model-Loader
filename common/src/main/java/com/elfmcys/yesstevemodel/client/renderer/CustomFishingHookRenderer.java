@@ -26,7 +26,7 @@ public class CustomFishingHookRenderer {
                 Player playerOwner = fishingHook.getPlayerOwner();
                 if (playerOwner != null) {
                     poseStack.pushPose();
-                    renderFishingLine(fishingHook, partialTick, poseStack, bufferSource, playerOwner);
+                    renderFishingLine(fishingHook, partialTick, poseStack, bufferSource, packedLight, playerOwner);
                     poseStack.popPose();
                 }
                 return false;
@@ -35,7 +35,7 @@ public class CustomFishingHookRenderer {
         }).orElse(true);
     }
 
-    private static void renderFishingLine(FishingHook fishingHook, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, Player player) {
+    private static void renderFishingLine(FishingHook fishingHook, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Player player) {
         int hand = player.getMainArm() == HumanoidArm.RIGHT ? 1 : -1;
         if (!ToolActionBridge.canFishingRodCast(player.getMainHandItem())) {
             hand = -hand;
@@ -70,7 +70,7 @@ public class CustomFishingHookRenderer {
         VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.leash());
         PoseStack.Pose poseLast = poseStack.last();
         for (int size = 0; size <= 16; size++) {
-            stringVertex(startX, startY, startZ, buffer, poseLast, fraction(size), fraction(size + 1), color[0], color[1], color[2]);
+            stringVertex(startX, startY, startZ, buffer, poseLast, fraction(size), fraction(size + 1), color[0], color[1], color[2], packedLight);
         }
     }
 
@@ -85,7 +85,7 @@ public class CustomFishingHookRenderer {
     }
 
     @Unique
-    private static void stringVertex(float x, float y, float z, VertexConsumer vertexConsumer, PoseStack.Pose pose, float startFrac, float endFrac, float red, float green, float blue) {
+    private static void stringVertex(float x, float y, float z, VertexConsumer vertexConsumer, PoseStack.Pose pose, float startFrac, float endFrac, float red, float green, float blue, int packedLight) {
         float vx = x * startFrac;
         float vy = (y * ((startFrac * startFrac) + startFrac) * 0.5f) + 0.25f;
         float vz = z * startFrac;
@@ -96,6 +96,7 @@ public class CustomFishingHookRenderer {
         if (length > 1.0E-4f) {
             vertexConsumer.addVertex(pose.pose(), vx, vy, vz)
                     .setColor(red, green, blue, 1.0f)
+                    .setLight(packedLight)
                     .setNormal(pose, dx / length, dy / length, dz / length);
         }
     }

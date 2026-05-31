@@ -146,7 +146,7 @@ public class ModelButton extends Button {
                 String selectedModelId = this.modelIdHolder.getModelId();
                 String selectedTextureName = resolveSelectionTextureName();
                 cap.initModelWithTexture(selectedModelId, selectedTextureName);
-                if (NetworkHandler.isClientConnected()) {
+                if (NetworkHandler.isClientConnected() && !com.elfmcys.yesstevemodel.client.ClientModelManager.isLocalOnlyModel(selectedModelId)) {
                     NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(selectedModelId, selectedTextureName));
                 }
             });

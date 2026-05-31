@@ -161,7 +161,9 @@ public final class TextureGrid extends OptionRow<Object> {
         if (mc.player == null) return;
         PlayerCapability.get(mc.player).ifPresent(cap -> {
             cap.setCurrentTexture(name);
-            NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(owner.modelId, name));
+            if (!com.elfmcys.yesstevemodel.client.ClientModelManager.isLocalOnlyModel(owner.modelId)) {
+                NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(owner.modelId, name));
+            }
         });
     }
 }

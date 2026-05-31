@@ -10,12 +10,15 @@ import rip.ysm.gui.OptionGroup;
 import rip.ysm.gui.OptionScreen;
 import rip.ysm.gui.components.BooleanOptionRow;
 import rip.ysm.gui.components.EnumOptionRow;
+import rip.ysm.gui.components.RadioOptionRow;
 import rip.ysm.gui.components.SliderOptionRow;
+
+import java.util.List;
 
 public class ExtraPlayerConfigScreen extends OptionScreen {
 
     public ExtraPlayerConfigScreen(@Nullable PlayerModelScreen modelScreen) {
-        super(Component.literal("OpenYSM"), modelScreen);
+        super(Component.literal("设置"), modelScreen);
     }
 
     @Override
@@ -33,8 +36,7 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("disable_external_first_person_anim", GeneralConfig.DISABLE_EXTERNAL_FP_ANIM)));
 
         OptionGroup performance = new OptionGroup("performance")
-                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("use_compatibility_renderer", GeneralConfig.USE_COMPATIBILITY_RENDERER)))
-                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("use_gpu_renderer", GeneralConfig.USE_GPU_RENDERER)))
+                .add(new RadioOptionRow(0, 0, 0, 22, rendererOption(), rendererLabels()))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("disable_model_glow_in_shaderpack", GeneralConfig.DISABLE_MODEL_GLOW_IN_SHADERPACK)));
 
         OptionGroup misc = new OptionGroup("misc")
@@ -46,5 +48,28 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
         groups.add(rendering);
         groups.add(performance);
         groups.add(misc);
+    }
+
+    private static Option<Integer> rendererOption() {
+        return new Option<>("renderer", ExtraPlayerConfigScreen::getRendererOption, ExtraPlayerConfigScreen::setRendererOption);
+    }
+
+    private static int getRendererOption() {
+        return !GeneralConfig.USE_COMPATIBILITY_RENDERER.get() && GeneralConfig.USE_GPU_RENDERER.get() ? 1 : 0;
+    }
+
+    private static void setRendererOption(Integer value) {
+        boolean useGpuRenderer = value != null && value == 1;
+        GeneralConfig.USE_COMPATIBILITY_RENDERER.set(!useGpuRenderer);
+        GeneralConfig.USE_COMPATIBILITY_RENDERER.save();
+        GeneralConfig.USE_GPU_RENDERER.set(useGpuRenderer);
+        GeneralConfig.USE_GPU_RENDERER.save();
+    }
+
+    private static List<String> rendererLabels() {
+        return List.of(
+                Component.translatable("gui.yes_steve_model.config.renderer.compatibility").getString(),
+                Component.translatable("gui.yes_steve_model.config.renderer.gpu").getString()
+        );
     }
 }

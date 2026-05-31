@@ -1,11 +1,13 @@
 package com.elfmcys.yesstevemodel.client.input;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.util.ItemTagsConstants;
 import com.elfmcys.yesstevemodel.util.InputUtil;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.client.ClientRawInputEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -63,6 +65,9 @@ public class InputStateKey {
         if (player == null) {
             return;
         }
+        if (shouldSkipSyntheticRightClickSwing(player, button)) {
+            return;
+        }
         InteractionHand hand = resolveClickHand(player, button);
         player.swing(hand, false);
     }
@@ -76,5 +81,23 @@ public class InputStateKey {
 
     private static boolean shouldSwingOffhandOnRightClick(ItemStack offhandItem) {
         return !offhandItem.isEmpty() && !offhandItem.is(Items.TOTEM_OF_UNDYING);
+    }
+
+    private static boolean shouldSkipSyntheticRightClickSwing(LocalPlayer player, int button) {
+        return button == 1 && isShield(player.getOffhandItem()) && isShieldFallbackMainHandItem(player.getMainHandItem());
+    }
+
+    private static boolean isShield(ItemStack stack) {
+        return !stack.isEmpty() && (stack.is(Items.SHIELD) || stack.is(ItemTagsConstants.SHIELDS));
+    }
+
+    private static boolean isShieldFallbackMainHandItem(ItemStack stack) {
+        return !stack.isEmpty()
+                && (stack.is(ItemTags.SWORDS) || stack.is(ItemTagsConstants.SWORDS)
+                || stack.is(ItemTags.AXES) || stack.is(ItemTagsConstants.AXES)
+                || stack.is(ItemTags.PICKAXES) || stack.is(ItemTagsConstants.PICKAXES)
+                || stack.is(ItemTags.SHOVELS) || stack.is(ItemTagsConstants.SHOVELS)
+                || stack.is(ItemTags.HOES) || stack.is(ItemTagsConstants.HOES)
+                || stack.is(Items.MACE) || stack.is(ItemTagsConstants.MACE));
     }
 }

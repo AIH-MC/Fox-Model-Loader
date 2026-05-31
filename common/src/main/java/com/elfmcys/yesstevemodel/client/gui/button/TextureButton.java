@@ -63,7 +63,9 @@ public class TextureButton extends Button {
         if (localPlayer != null) {
             PlayerCapability.get(localPlayer).ifPresent(cap -> {
                 cap.setCurrentTexture(this.previewEntity.getCurrentTextureName());
-                NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(this.previewEntity.getModelId(), this.previewEntity.getCurrentTextureName()));
+                if (!com.elfmcys.yesstevemodel.client.ClientModelManager.isLocalOnlyModel(this.previewEntity.getModelId())) {
+                    NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(this.previewEntity.getModelId(), this.previewEntity.getCurrentTextureName()));
+                }
             });
         }
     }
