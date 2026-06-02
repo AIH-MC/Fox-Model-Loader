@@ -81,6 +81,10 @@ public final class CapabilityEvent {
         SYNCED_PLAYER_MODEL_STATES.values().forEach(states -> states.remove(playerId));
     }
 
+    public static void forgetSyncedModelStates(ServerPlayer receiver) {
+        SYNCED_PLAYER_MODEL_STATES.remove(receiver.getUUID());
+    }
+
     private static EventResult onEntityAdd(Entity entity, Level level) {
         if (!YesSteveModel.isAvailable()) {
             return EventResult.pass();

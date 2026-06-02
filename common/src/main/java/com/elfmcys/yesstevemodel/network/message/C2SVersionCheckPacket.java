@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.network.message;
 import com.elfmcys.yesstevemodel.capability.AuthModelsCapability;
 import com.elfmcys.yesstevemodel.capability.ModelInfoCapability;
 import com.elfmcys.yesstevemodel.capability.StarModelsCapability;
+import com.elfmcys.yesstevemodel.event.CapabilityEvent;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import net.minecraft.network.FriendlyByteBuf;
@@ -43,6 +44,7 @@ public class C2SVersionCheckPacket {
             StarModelsCapability.get(sender).ifPresent(cap -> {
                 NetworkHandler.sendToClientPlayer(new S2CSyncStarModelsPacket(cap.getStarModels()), sender);
             });
+            CapabilityEvent.forgetSyncedModelStates(sender);
             ServerModelManager.requestPlayerAuth(sender, null);
         }
     }

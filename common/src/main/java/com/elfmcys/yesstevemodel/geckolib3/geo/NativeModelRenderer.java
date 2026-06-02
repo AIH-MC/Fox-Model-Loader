@@ -25,11 +25,13 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.Arrays;
 
 public class NativeModelRenderer {
     private static final int FULL_BRIGHT_LIGHT = 0xF000F0;
 
     private static final Matrix4f projectionModelViewMatrix = new Matrix4f();
+    private static final ThreadLocal<RenderScratch> FALLBACK_SCRATCH = ThreadLocal.withInitial(RenderScratch::new);
 
     public static void renderMesh(VertexConsumer buffer, PoseStack.Pose pose, GeoModel model, float[] boneParams, float[] stateBuffer, int textureIndex, int renderPartMask, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
         renderMesh(buffer, pose, model, boneParams, stateBuffer, textureIndex, renderPartMask, packedLight, packedOverlay, red, green, blue, alpha, null);
@@ -41,7 +43,7 @@ public class NativeModelRenderer {
 
     public static void renderMesh(VertexConsumer buffer, PoseStack.Pose pose, GeoModel model, float[] boneParams, float[] stateBuffer, int textureIndex, int renderPartMask, int packedLight, int packedOverlay, float red, float green, float blue, float alpha, net.minecraft.resources.Identifier textureLocation, boolean allowDirectGpuRenderer) {
         OculusCompat.updatePBRState();
-        new Matrix4f().mul(new Matrix4f(), projectionModelViewMatrix);
+        projectionModelViewMatrix.identity();
         boolean isPreview = ModelPreviewRenderer.isPreview() || ModelPreviewRenderer.isExtraPlayer();
         boolean shaderPackInUse = OculusCompat.isShaderPackInUse() && !isPreview;
         boolean disableGlow = shouldDisableModelGlow(shaderPackInUse);
@@ -59,13 +61,13 @@ public class NativeModelRenderer {
                     return;
                 }
             } else {
-                if (GpuRenderPath.tryRender(model, pose, boneParams, stateBuffer, renderPartMask, packedLight, packedOverlay, red, green, blue, alpha, textureLocation)) {
+                if (GpuRenderPath.tryRender(model, pose, boneParams, stateBuffer, renderPartMask, packedLight, packedOverlay, red, green, blue, alpha, textureLocation, model.isTranslucentTexture(textureIndex))) {
                     return;
                 }
             }
         }
 
-        if (NativeLibLoader.isLoaded() && !GeneralConfig.USE_COMPATIBILITY_RENDERER.get() && !disableGlow) { // WIP: SIMD MODEL RENDER
+        if (!isPreview && NativeLibLoader.isLoaded() && !GeneralConfig.USE_COMPATIBILITY_RENDERER.get() && !disableGlow) { // WIP: SIMD MODEL RENDER
             nativeRenderModel(
                     buffer,
                     pose,
@@ -152,26 +154,25 @@ public class NativeModelRenderer {
         if (mesh.bakedBones == null || mesh.bakedBones.isEmpty()) return;
 
         // TODO: 淇京GC澹撳姏
+        RenderScratch scratch = FALLBACK_SCRATCH.get();
+        scratch.ensureBoneCapacity(mesh.bakedBones.size());
+
         Matrix4f rootPoseMat = pose.pose();
         Matrix3f rootNormalMC = pose.normal();
-        Matrix4f projMat = new Matrix4f();
-
-        Matrix4f identityMat = new Matrix4f();
-        Matrix4f globalBoneMat = new Matrix4f();
-        Matrix4f projBoneMat = new Matrix4f();
-        Matrix3f localNormalMat = new Matrix3f();
-        Matrix3f globalNormalMat = new Matrix3f();
-
-        Vector4f p1 = new Vector4f();
-        Vector4f p2 = new Vector4f();
-        Vector4f p3 = new Vector4f();
-        Vector4f tempPos = new Vector4f();
-        Vector3f tempNorm = new Vector3f();
-        Matrix4f[] boneLocalTransforms = new Matrix4f[mesh.bakedBones.size()];
-        boolean[] boneVisible = new boolean[mesh.bakedBones.size()];
+        Matrix4f identityMat = scratch.identityMat.identity();
+        Matrix4f globalBoneMat = scratch.globalBoneMat;
+        Matrix4f projBoneMat = scratch.projBoneMat;
+        Matrix3f localNormalMat = scratch.localNormalMat;
+        Matrix3f globalNormalMat = scratch.globalNormalMat;
+        Vector4f tempPos = scratch.tempPos;
+        Vector3f tempNorm = scratch.tempNorm;
+        Matrix4f[] boneLocalTransforms = scratch.boneLocalTransforms;
+        boolean[] boneVisible = scratch.boneVisible;
+        boolean[] boneComputed = scratch.boneComputed;
+        Arrays.fill(boneComputed, 0, mesh.bakedBones.size(), false);
 
         for (int i = 0; i < mesh.bakedBones.size(); i++) {
-            calculateBoneMatrix(i, mesh.bakedBones, boneParams, boneLocalTransforms, boneVisible, identityMat, stateBuffer);
+            calculateBoneMatrix(i, mesh.bakedBones, boneParams, boneLocalTransforms, boneVisible, boneComputed, identityMat, stateBuffer);
         }
 
         for (int i = 0; i < mesh.bakedBones.size(); i++) {
@@ -186,7 +187,7 @@ public class NativeModelRenderer {
 
             Matrix4f localBoneMat = boneLocalTransforms[i];
             globalBoneMat.set(rootPoseMat).mul(localBoneMat);
-            projBoneMat.set(projMat).mul(globalBoneMat);
+            projBoneMat.identity().mul(globalBoneMat);
 
             // 娉曠窔鍏ㄥ煙鐭╅櫍
             localBoneMat.normal(localNormalMat);
@@ -206,22 +207,27 @@ public class NativeModelRenderer {
         }
     }
 
-    private static Matrix4f calculateBoneMatrix(int idx, java.util.List<GeoModel.BakedBone> bones, float[] boneParams, Matrix4f[] cache, boolean[] visibleCache, Matrix4f rootPose, float[] stateBuffer) {
-        if (cache[idx] != null) return cache[idx];
+    private static Matrix4f calculateBoneMatrix(int idx, java.util.List<GeoModel.BakedBone> bones, float[] boneParams, Matrix4f[] cache, boolean[] visibleCache, boolean[] computedCache, Matrix4f rootPose, float[] stateBuffer) {
+        if (computedCache[idx]) return cache[idx];
 
         GeoModel.BakedBone bone = bones.get(idx);
         Matrix4f parentMatrix = rootPose;
         boolean isVisible = true;
 
         if (bone.parentIdx != -1) {
-            parentMatrix = calculateBoneMatrix(bone.parentIdx, bones, boneParams, cache, visibleCache, rootPose, stateBuffer);
+            parentMatrix = calculateBoneMatrix(bone.parentIdx, bones, boneParams, cache, visibleCache, computedCache, rootPose, stateBuffer);
             // If parent bone is not visible, child bone must also not be visible
             if (!visibleCache[bone.parentIdx]) {
                 isVisible = false;
             }
         }
 
-        Matrix4f localMat = new Matrix4f(parentMatrix);
+        Matrix4f localMat = cache[idx];
+        if (localMat == null) {
+            localMat = new Matrix4f();
+            cache[idx] = localMat;
+        }
+        localMat.set(parentMatrix);
 
         int pOffset = idx * 12;
         float animRx = boneParams[pOffset];
@@ -277,6 +283,7 @@ public class NativeModelRenderer {
 
         cache[idx] = localMat;
         visibleCache[idx] = isVisible;
+        computedCache[idx] = true;
         return localMat;
     }
 
@@ -310,11 +317,9 @@ public class NativeModelRenderer {
 
         if (mesh.nativeModelHandle == 0) return;
 
-        Matrix4f projMat = new Matrix4f();
-
         pose.pose().get(matrixTransferArray, 0);
         pose.normal().get(matrixTransferArray, 16);
-        projMat.get(matrixTransferArray, 32);
+        projectionModelViewMatrix.identity().get(matrixTransferArray, 32);
 
         GeoModel.nComputeModelVertices(
                 mesh.nativeModelHandle,
@@ -325,5 +330,26 @@ public class NativeModelRenderer {
                 packedLight, packedOverlay,
                 r, g, b, a
         );
+    }
+
+    private static final class RenderScratch {
+        final Matrix4f identityMat = new Matrix4f();
+        final Matrix4f globalBoneMat = new Matrix4f();
+        final Matrix4f projBoneMat = new Matrix4f();
+        final Matrix3f localNormalMat = new Matrix3f();
+        final Matrix3f globalNormalMat = new Matrix3f();
+        final Vector4f tempPos = new Vector4f();
+        final Vector3f tempNorm = new Vector3f();
+        Matrix4f[] boneLocalTransforms = new Matrix4f[0];
+        boolean[] boneVisible = new boolean[0];
+        boolean[] boneComputed = new boolean[0];
+
+        void ensureBoneCapacity(int boneCount) {
+            if (boneLocalTransforms.length < boneCount) {
+                boneLocalTransforms = Arrays.copyOf(boneLocalTransforms, boneCount);
+                boneVisible = Arrays.copyOf(boneVisible, boneCount);
+                boneComputed = Arrays.copyOf(boneComputed, boneCount);
+            }
+        }
     }
 }

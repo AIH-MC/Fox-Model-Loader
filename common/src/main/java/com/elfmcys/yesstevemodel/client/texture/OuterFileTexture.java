@@ -1,11 +1,13 @@
 package com.elfmcys.yesstevemodel.client.texture;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
 import rip.ysm.compat.oculus.ShadersTextureType;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMaps;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
@@ -18,7 +20,7 @@ import java.io.IOException;
 import java.util.Map;
 
 public class OuterFileTexture extends AbstractTexture implements ITextureMap {
-    private final byte[] data;
+    private byte[] data;
 
     private Map<ShadersTextureType, OuterFileTexture> suffixTextures = Reference2ReferenceMaps.emptyMap();
 
@@ -38,8 +40,13 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
             return;
         }
         NativeImage image = null;
+        byte[] textureData = this.data;
         try {
-            image = NativeImage.read(new ByteArrayInputStream(data));
+            if (textureData == null) {
+                throw new IOException("Texture source bytes were released");
+            }
+            ModelMemoryProfiler.logBytes("texture-decode-start", null, textureData);
+            image = NativeImage.read(new ByteArrayInputStream(textureData));
         } catch (IOException e) {
             YesSteveModel.LOGGER.warn("Failed to decode YSM texture, using fallback texture", e);
             image = createFallbackImage();
@@ -49,6 +56,14 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
 
     public boolean isLoaded() {
         return this.uploaded && this.textureView != null;
+    }
+
+    @Override
+    public GpuTextureView getTextureView() {
+        if (!isLoaded() && RenderSystem.isOnRenderThread()) {
+            doLoad();
+        }
+        return super.getTextureView();
     }
 
     private void uploadImage(NativeImage image) {
@@ -71,6 +86,7 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
             this.textureView = device.createTextureView(this.texture);
             device.createCommandEncoder().writeToTexture(this.texture, image);
             this.uploaded = true;
+            ModelMemoryProfiler.log("texture-uploaded", null);
         }
     }
 

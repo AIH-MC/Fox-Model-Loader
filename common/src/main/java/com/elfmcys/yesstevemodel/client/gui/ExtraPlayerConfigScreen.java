@@ -4,6 +4,7 @@ import com.elfmcys.yesstevemodel.config.ExtraPlayerRenderConfig;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.config.LoadingStateConfig;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.common.ModConfigSpec;
 import org.jetbrains.annotations.Nullable;
 import rip.ysm.gui.Option;
 import rip.ysm.gui.OptionGroup;
@@ -39,6 +40,16 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
                 .add(new RadioOptionRow(0, 0, 0, 22, rendererOption(), rendererLabels()))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("disable_model_glow_in_shaderpack", GeneralConfig.DISABLE_MODEL_GLOW_IN_SHADERPACK)));
 
+        OptionGroup experimentalTesting = new OptionGroup("experimental_testing")
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("model_memory_profiler", GeneralConfig.MODEL_MEMORY_PROFILER)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_frame_profiler", GeneralConfig.ANIMATION_FRAME_PROFILER)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_debug_log", GeneralConfig.ANIMATION_DEBUG_LOG)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("warn_repeated_animation_evaluation", GeneralConfig.WARN_REPEATED_ANIMATION_EVALUATION)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("release_texture_bytes_after_upload", GeneralConfig.RELEASE_TEXTURE_BYTES_AFTER_UPLOAD)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("resource_station_monitor_log", GeneralConfig.RESOURCE_STATION_MONITOR_LOG)))
+                .add(new SliderOptionRow(0, 0, 0, 22, intOption("max_cached_gpu_models", GeneralConfig.MAX_CACHED_GPU_MODELS), 0.0d, 128.0d, 1.0d, ""))
+                .add(new SliderOptionRow(0, 0, 0, 22, intOption("unused_model_ttl_seconds", GeneralConfig.UNUSED_MODEL_TTL_SECONDS), 30.0d, 1800.0d, 30.0d, "s"));
+
         OptionGroup misc = new OptionGroup("misc")
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("print_animation_roulette_msg", GeneralConfig.PRINT_ANIMATION_ROULETTE_MSG)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("disable_loading_state_screen", LoadingStateConfig.DISABLE_LOADING_STATE_SCREEN)))
@@ -47,7 +58,15 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
         groups.add(general);
         groups.add(rendering);
         groups.add(performance);
+        groups.add(experimentalTesting);
         groups.add(misc);
+    }
+
+    private static Option<Double> intOption(String key, ModConfigSpec.IntValue cfg) {
+        return new Option<>(key, () -> cfg.get().doubleValue(), value -> {
+            cfg.set(value == null ? 0 : value.intValue());
+            cfg.save();
+        });
     }
 
     private static Option<Integer> rendererOption() {

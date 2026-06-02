@@ -157,6 +157,15 @@ public final class ModelUploadSession {
         s.tick();
     }
 
+    public static synchronized void failCurrent(Component reason) {
+        ModelUploadSession s = instance;
+        if (s == null || s.isTerminal()) {
+            return;
+        }
+        s.fail(reason);
+        notifyListeners();
+    }
+
     private static void notifyListeners() {
         ModelUploadSession s = instance;
         for (Listener l : listeners) {

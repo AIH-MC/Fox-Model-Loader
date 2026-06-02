@@ -1,5 +1,6 @@
 package rip.ysm.gpu;
 
+import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
 import com.elfmcys.yesstevemodel.geckolib3.geo.render.built.GeoModel;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import org.lwjgl.opengl.*;
@@ -42,6 +43,7 @@ public final class GpuMesh {
         this.partMask3Start = pm3s;
         this.partMask3Count = pm3c;
         this.perFrameBoneBuffer = MemoryUtil.memAlloc(boneCount * 144).order(ByteOrder.nativeOrder());
+        ModelMemoryProfiler.log("gpu-mesh-built bones=" + boneCount + " vertices=" + vertexCount + " indices=" + indexCount, null);
     }
 
     public int indexOffsetBytes(int renderPartMask) {
@@ -107,5 +109,6 @@ public final class GpuMesh {
             GeoModel.nFreeGpuMesh(pointer);
         }
         MemoryUtil.memFree(perFrameBoneBuffer);
+        ModelMemoryProfiler.log("gpu-mesh-disposed bones=" + boneCount + " vertices=" + vertexCount + " indices=" + indexCount, null);
     }
 }

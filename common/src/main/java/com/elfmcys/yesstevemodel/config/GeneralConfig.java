@@ -32,6 +32,22 @@ public class GeneralConfig {
 
     public static ModConfigSpec.BooleanValue USE_GPU_RENDERER;
 
+    public static ModConfigSpec.BooleanValue MODEL_MEMORY_PROFILER;
+
+    public static ModConfigSpec.BooleanValue ANIMATION_FRAME_PROFILER;
+
+    public static ModConfigSpec.BooleanValue ANIMATION_DEBUG_LOG;
+
+    public static ModConfigSpec.BooleanValue WARN_REPEATED_ANIMATION_EVALUATION;
+
+    public static ModConfigSpec.BooleanValue RELEASE_TEXTURE_BYTES_AFTER_UPLOAD;
+
+    public static ModConfigSpec.BooleanValue RESOURCE_STATION_MONITOR_LOG;
+
+    public static ModConfigSpec.IntValue MAX_CACHED_GPU_MODELS;
+
+    public static ModConfigSpec.IntValue UNUSED_MODEL_TTL_SECONDS;
+
     public static ModConfigSpec.BooleanValue DISABLE_MODEL_GLOW_IN_SHADERPACK;
 
     public static ModConfigSpec.EnumValue<RouletteSettingsMode> ROULETTE_SETTINGS_MODE;
@@ -122,6 +138,24 @@ public class GeneralConfig {
         builder.push("Integration");
         SOPHISTICATEDBACKPACK = builder.define("SophisticatedBackpack", true);
         PARCOOL = builder.define("Parcool", true);
+        builder.pop();
+        builder.push("ExperimentalTesting");
+        builder.comment("Log model loading memory checkpoints. Intended for diagnostics only.");
+        MODEL_MEMORY_PROFILER = builder.define("ModelMemoryProfiler", false);
+        builder.comment("Collect animation timing/evaluation diagnostics. Intended for diagnostics only.");
+        ANIMATION_FRAME_PROFILER = builder.define("AnimationFrameProfiler", false);
+        builder.comment("Print one [YSM-ANIM] line for each animation evaluation when AnimationFrameProfiler is enabled.");
+        ANIMATION_DEBUG_LOG = builder.define("AnimationDebugLog", false);
+        builder.comment("Warn when the same entity evaluates animation more than once in the same render frame.");
+        WARN_REPEATED_ANIMATION_EVALUATION = builder.define("WarnRepeatedAnimationEvaluation", true);
+        builder.comment("Release original texture byte arrays after successful GPU upload. Disable if resource reloads need to re-decode outer textures.");
+        RELEASE_TEXTURE_BYTES_AFTER_UPLOAD = builder.define("ReleaseTextureBytesAfterUpload", false);
+        builder.comment("Print detailed [YSM-RESOURCE] logs for resource station listing, HTTP, preview, and download diagnostics.");
+        RESOURCE_STATION_MONITOR_LOG = builder.define("ResourceStationMonitorLog", false);
+        builder.comment("Maximum client models allowed to keep GPU/native render caches. 0 disables LRU unloading.");
+        MAX_CACHED_GPU_MODELS = builder.defineInRange("MaxCachedGpuModels", 0, 0, 512);
+        builder.comment("Minimum idle time before an unused client model GPU/native cache can be unloaded by LRU.");
+        UNUSED_MODEL_TTL_SECONDS = builder.defineInRange("UnusedModelTtlSeconds", 300, 30, 86400);
         builder.pop();
     }
 }

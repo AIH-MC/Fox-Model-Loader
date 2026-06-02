@@ -81,6 +81,12 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
 
     private Category category;
 
+    private boolean selectionMode;
+
+    private final Set<String> selectedModelIds = new HashSet<>();
+
+    private Component selectionStatus = Component.empty();
+
     private static final PlayerPreviewEntity[] previewHolders = new PlayerPreviewEntity[10];
 
     private static final Object2IntMap<String> pageIndexMap = new Object2IntOpenHashMap();
@@ -367,6 +373,15 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             GeneralConfig.SHOW_MODEL_ID_FIRST.set(v);
             GeneralConfig.SHOW_MODEL_ID_FIRST.save();
         }).build());
+        FlatColorButton selectButton = new FlatColorButton(this.guiLeft + 132, this.guiTop - 18, 44, 14, Component.translatable("gui.yes_steve_model.model_select.select"), button -> {
+            this.selectionMode = !this.selectionMode;
+            if (!this.selectionMode) {
+                this.selectedModelIds.clear();
+            }
+            init();
+        });
+        selectButton.setSelected(this.selectionMode);
+        addRenderableWidget(selectButton);
         addRenderableWidget(new IconButton(this.guiLeft + 328, this.guiTop + 5, 18, 18, 32, 0, button4 -> {
             if (this.category != Category.ALL) {
                 this.category = Category.ALL;
@@ -396,6 +411,22 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         });
         importButton.setTooltipLines(java.util.Collections.singletonList(getImportTooltip()));
         addRenderableWidget(importButton);
+        addRenderableWidget(new IconButton(this.guiLeft + 357, this.guiTop + 5, 18, 18, 16, 0, button9 -> {
+            Minecraft.getInstance().setScreen(new ResourceStationScreen(this));
+        }).setTooltipText("gui.yes_steve_model.resource_station.tooltip"));
+        if (this.selectionMode) {
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.delete"), button -> runDeleteSelection()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 41, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.move"), button -> runMoveSelection()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 77, this.guiTop + 253, 44, 14, Component.translatable("gui.yes_steve_model.model_select.new_category"), button -> runCreateCategory()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 123, this.guiTop + 253, 44, 14, Component.translatable("gui.yes_steve_model.model_select.rename_category"), button -> runRenameCategory()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 270, 44, 14, Component.translatable("gui.yes_steve_model.model_select.delete_category"), button -> runDeleteCategory()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 51, this.guiTop + 270, 38, 14, Component.translatable("gui.yes_steve_model.model_select.select_all"), button -> selectAllFilteredModels()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 91, this.guiTop + 270, 38, 14, Component.translatable("gui.yes_steve_model.model_select.cancel"), button -> {
+                this.selectedModelIds.clear();
+                this.selectionMode = false;
+                init();
+            }));
+        }
         addRenderableWidget(new FlatColorButton(this.guiLeft + 198, this.guiTop + 215, 52, 14, Component.translatable("gui.yes_steve_model.pre_page"), button10 -> {
             int currentPage = getCurrentPage();
             if (currentPage > 0) {
@@ -438,7 +469,11 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                     boolean isAuthLocked = modelAssembly2.getTextureRegistry().isAuthModel() && !value3.getAuthModels().contains(str2);
                     previewEntity.initModelWithTexture(str2, modelAssembly2.getAnimationBundle().getDefaultTextureName());
                     previewEntity.getAnimationStateMachine().setCurrentAnimation(modelAssembly2.getModelData().getModelProperties().getPreviewAnimation());
-                    addRenderableWidget(createModelButton(slotX, slotY, isAuthLocked, previewEntity, modelAssembly2));
+                    if (this.selectionMode) {
+                        addRenderableWidget(new SelectableModelButton(slotX, slotY, false, previewEntity, modelAssembly2, str2, () -> this.selectedModelIds.contains(str2), this::toggleModelSelection));
+                    } else {
+                        addRenderableWidget(createModelButton(slotX, slotY, isAuthLocked, previewEntity, modelAssembly2));
+                    }
                 });
             }
         }
@@ -481,6 +516,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             }
         }
         renderSyncStatus(guiGraphics);
+        renderSelectionStatus(guiGraphics);
         super.extractRenderState(extractor, mouseX, mouseY, partialTick);
         ((ScreenAccessor) this).ysm$getRenderables().stream().filter(renderable -> {
             return renderable instanceof IconButton;
@@ -507,6 +543,16 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
 /*             GuiGraphicsExtractor.renderTooltip(this.font, this.font.split(mutableComponentWithStyle, 320), mouseX, mouseY); */
             guiGraphics.pose().popMatrix();
         }
+    }
+
+    private void renderSelectionStatus(GuiGraphicsExtractor guiGraphics) {
+        if (!this.selectionMode && this.selectionStatus.getString().isBlank()) {
+            return;
+        }
+        Component text = this.selectionStatus.getString().isBlank()
+                ? Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size())
+                : this.selectionStatus;
+        guiGraphics.text(this.font, this.font.split(text.copy().withStyle(ChatFormatting.GRAY), 170).get(0), this.guiLeft + 5, this.guiTop + 238, 0xFFF3F3E0);
     }
 
     private void renderSyncStatus(GuiGraphicsExtractor guiGraphics) {
@@ -668,6 +714,118 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         } else {
             this.searchBox.insertText(text);
         }
+    }
+
+    private void toggleModelSelection(String modelId) {
+        if (!this.selectedModelIds.add(modelId)) {
+            this.selectedModelIds.remove(modelId);
+        }
+        this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
+        init();
+    }
+
+    private void selectAllFilteredModels() {
+        this.selectedModelIds.addAll(this.sortedModelKeys);
+        this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
+        init();
+    }
+
+    private void runDeleteSelection() {
+        this.selectionStatus = ModelPanelFileActions.deleteModels(this.selectedModelIds);
+        this.selectedModelIds.clear();
+        init();
+    }
+
+    private void runMoveSelection() {
+        List<String> categories = getKnownCategories();
+        Minecraft.getInstance().setScreen(new CategorySelectScreen(this, Component.translatable("gui.yes_steve_model.model_select.choose_category"), categories, category -> {
+            this.selectionStatus = ModelPanelFileActions.moveModels(this.selectedModelIds, category);
+            this.selectedModelIds.clear();
+            init();
+        }, () -> Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.new_category_prompt"), StringPool.EMPTY, category -> {
+            this.selectionStatus = ModelPanelFileActions.createCategory(category);
+            this.selectionStatus = ModelPanelFileActions.moveModels(this.selectedModelIds, category);
+            this.selectedModelIds.clear();
+            init();
+        }))));
+    }
+
+    private void runCreateCategory() {
+        Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.new_category_prompt"), StringPool.EMPTY, category -> {
+            String normalized = ModelPanelFileActions.normalizeCategory(category);
+            this.selectionStatus = ModelPanelFileActions.createCategory(normalized);
+            if (StringUtils.isNotBlank(normalized)) {
+                this.modelPackMap.putIfAbsent(normalized + "/", new ModelPackData(normalized + "/", normalized, StringPool.EMPTY, null, null));
+            }
+            init();
+        }));
+    }
+
+    private void runRenameCategory() {
+        Minecraft.getInstance().setScreen(new CategorySelectScreen(this, Component.translatable("gui.yes_steve_model.model_select.rename_category"), getKnownCategories(), oldCategory -> {
+            Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.rename_category_prompt"), oldCategory, newCategory -> {
+                this.selectionStatus = ModelPanelFileActions.renameCategory(oldCategory, newCategory);
+                String oldPath = ModelPanelFileActions.normalizeCategory(oldCategory) + "/";
+                String newPath = ModelPanelFileActions.normalizeCategory(newCategory) + "/";
+                renameCachedCategory(oldPath, newPath);
+                if (currentPath.equals(oldPath)) {
+                    currentPath = newPath;
+                } else if (currentPath.startsWith(oldPath)) {
+                    currentPath = newPath + currentPath.substring(oldPath.length());
+                }
+                init();
+            }));
+        }, null));
+    }
+
+    private void runDeleteCategory() {
+        Minecraft.getInstance().setScreen(new CategorySelectScreen(this, Component.translatable("gui.yes_steve_model.model_select.delete_category"), getKnownCategories(), category -> {
+            Minecraft.getInstance().setScreen(new CategoryDeleteConfirmScreen(this, category, deleteModels -> {
+                this.selectionStatus = ModelPanelFileActions.deleteCategory(category, deleteModels);
+                removeCachedCategory(ModelPanelFileActions.normalizeCategory(category) + "/");
+                init();
+            }));
+        }, null));
+    }
+
+    private void renameCachedCategory(String oldPath, String newPath) {
+        Object2ReferenceOpenHashMap<String, ModelPackData> updated = new Object2ReferenceOpenHashMap<>();
+        this.modelPackMap.forEach((path, packData) -> {
+            if (path.equals(oldPath) || path.startsWith(oldPath)) {
+                String renamedPath = newPath + path.substring(oldPath.length());
+                updated.put(renamedPath, new ModelPackData(renamedPath, FileTypeUtil.getFinalPathSegment(renamedPath), packData.getDescription(), packData.getTexture(), packData.getTranslations()));
+            } else {
+                updated.put(path, packData);
+            }
+        });
+        this.modelPackMap.clear();
+        this.modelPackMap.putAll(updated);
+        pageIndexMap.removeInt(oldPath);
+    }
+
+    private void removeCachedCategory(String path) {
+        this.modelPackMap.keySet().removeIf(packPath -> packPath.equals(path) || packPath.startsWith(path));
+        pageIndexMap.keySet().removeIf(packPath -> packPath.equals(path) || packPath.startsWith(path));
+        if (currentPath.equals(path) || currentPath.startsWith(path)) {
+            currentPath = StringPool.EMPTY;
+        }
+    }
+
+    private List<String> getKnownCategories() {
+        TreeSet<String> categories = new TreeSet<>();
+        this.modelPackMap.keySet().forEach(path -> {
+            String normalized = ModelPanelFileActions.normalizeCategory(path);
+            if (StringUtils.isNotBlank(normalized)) {
+                categories.add(normalized);
+            }
+        });
+        this.sortedPackKeys.forEach(path -> {
+            String normalized = ModelPanelFileActions.normalizeCategory(path);
+            if (StringUtils.isNotBlank(normalized)) {
+                categories.add(normalized);
+            }
+        });
+        return Lists.newArrayList(categories);
     }
 
     @Override

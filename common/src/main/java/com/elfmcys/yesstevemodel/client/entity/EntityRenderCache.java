@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.client.entity;
 
+import com.elfmcys.yesstevemodel.client.animation.debug.AnimationFrameProfiler;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import it.unimi.dsi.fastutil.objects.ObjectListIterator;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
@@ -25,6 +26,7 @@ public class EntityRenderCache {
         if (Minecraft.getInstance().player == null) {
             return;
         }
+        AnimationFrameProfiler.beginRenderFrame(partialTick);
         ObjectListIterator<WeakReference<GeoEntity<?>>> it = weakRefs.iterator();
         while (it.hasNext()) {
             GeoEntity geoEntity = (GeoEntity) ((WeakReference<?>) it.next()).get();

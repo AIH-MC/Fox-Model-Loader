@@ -47,6 +47,10 @@ public final class GpuRenderPath {
     private static Matrix4f[] boneLocalScratch = new Matrix4f[0];
     private static boolean[] boneComputedScratch = new boolean[0];
     private static boolean[] boneVisibleScratch = new boolean[0];
+    private static final float[] fogColorScratch = new float[4];
+    private static final Vector3f light0Scratch = new Vector3f(0.2f, 1.0f, -0.7f).normalize();
+    private static final Vector3f light1Scratch = new Vector3f(-0.2f, 1.0f, 0.7f).normalize();
+    private static final RenderStateCache stateCache = new RenderStateCache();
 
     public static boolean tryRender(
             GeoModel model,
@@ -57,11 +61,13 @@ public final class GpuRenderPath {
             int packedLight,
             int packedOverlay,
             float r, float g, float b, float a,
-            Identifier textureLocation
+            Identifier textureLocation,
+            boolean translucentTexture
     ) {
         if (!GpuCapability.isAvailable()) return false;
         if (!BoneSkinShader.ensureCompiled()) return false;
         if (model.bakedBones == null || model.bakedBones.isEmpty()) return false;
+        stateCache.invalidate();
 
         if (model.gpuMeshHandle == 0) {
             GpuMesh mesh = GpuMeshBuilder.build(model);
@@ -107,28 +113,28 @@ public final class GpuRenderPath {
         GlStateManager._depthMask(true);
         GlStateManager._disableBlend();
 
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + 2);
+        stateCache.activeTexture(GL13.GL_TEXTURE0 + 2);
         bindTextureView(lightmapTexture);
-        GL33.glBindSampler(2, clampSamplerId);
+        stateCache.bindSampler(2, clampSamplerId);
 
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + 1);
+        stateCache.activeTexture(GL13.GL_TEXTURE0 + 1);
         bindTextureView(overlayTexture);
-        GL33.glBindSampler(1, clampSamplerId);
+        stateCache.bindSampler(1, clampSamplerId);
 
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0);
+        stateCache.activeTexture(GL13.GL_TEXTURE0);
         bindTextureView(modelTexture);
-        GL33.glBindSampler(0, modelSamplerId);
+        stateCache.bindSampler(0, modelSamplerId);
 
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, mesh.boneSsbo);
+        stateCache.bindSsbo(mesh.boneSsbo);
         GL15.glBufferSubData(GL43.GL_SHADER_STORAGE_BUFFER, 0L, boneBuf);
-        GL43.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, BoneSkinShader.ssbo, mesh.boneSsbo);
+        stateCache.bindSsboBase(BoneSkinShader.ssbo, mesh.boneSsbo);
 
         float fogStart = 0f;
         float fogEnd = 1f;
-        float[] fogColor = new float[]{0,0,0,0};
+        float[] fogColor = fogColorScratch;
         int fogShape = 0; // MC 26.x: getShaderFogShape() return type changed
 
-        GlStateManager._glUseProgram(BoneSkinShader.program());
+        stateCache.useProgram(BoneSkinShader.program());
         if (BoneSkinShader.locProj() >= 0) GL20.glUniformMatrix4fv(BoneSkinShader.locProj(), false, projScratch);
         if (BoneSkinShader.locColor() >= 0) GL20.glUniform4f(BoneSkinShader.locColor(), r, g, b, a);
         if (BoneSkinShader.locOverlay() >= 0) GL20.glUniform1i(BoneSkinShader.locOverlay(), packedOverlay);
@@ -152,27 +158,20 @@ public final class GpuRenderPath {
         if (BoneSkinShader.locAlphaMode() >= 0) GL20.glUniform1i(BoneSkinShader.locAlphaMode(), 1);
         drawMeshParts(mesh, renderPartMask);
 
-        GlStateManager._enableBlend();
-        GlStateManager._blendFuncSeparate(770, 771, 1, 0);
-        if (BoneSkinShader.locAlphaMode() >= 0) GL20.glUniform1i(BoneSkinShader.locAlphaMode(), 2);
-        drawMeshParts(mesh, renderPartMask);
-        GlStateManager._disableBlend();
+        if (translucentTexture) {
+            GlStateManager._enableBlend();
+            GlStateManager._blendFuncSeparate(770, 771, 1, 0);
+            if (BoneSkinShader.locAlphaMode() >= 0) GL20.glUniform1i(BoneSkinShader.locAlphaMode(), 2);
+            drawMeshParts(mesh, renderPartMask);
+            GlStateManager._disableBlend();
+        }
 
-        GL43.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, BoneSkinShader.ssbo, 0);
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-        GlStateManager._glUseProgram(0);
+        stateCache.bindSsboBase(BoneSkinShader.ssbo, 0);
+        stateCache.bindSsbo(0);
+        stateCache.useProgram(0);
 
         com.mojang.blaze3d.vertex.BufferUploader.invalidate();
         GlStateManager._glBindVertexArray(0);
-        GL33.glBindSampler(2, 0);
-        GL33.glBindSampler(1, 0);
-        GL33.glBindSampler(0, 0);
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + 2);
-        GlStateManager._bindTexture(0);
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + 1);
-        GlStateManager._bindTexture(0);
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0);
-        GlStateManager._bindTexture(0);
 
         return true;
     }
@@ -191,8 +190,8 @@ public final class GpuRenderPath {
     }
 
     private static void refreshLights() {
-        currentLights[0] = new Vector3f(0.2f, 1.0f, -0.7f).normalize();
-        currentLights[1] = new Vector3f(-0.2f, 1.0f, 0.7f).normalize();
+        currentLights[0] = light0Scratch;
+        currentLights[1] = light1Scratch;
     }
 
     private static boolean computeBoneMatrices(
@@ -394,9 +393,7 @@ public final class GpuRenderPath {
     }
 
     private static void bindTextureView(TextureBinding texture) {
-        GlStateManager._bindTexture(texture.id);
-        GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, texture.baseMipLevel);
-        GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, texture.maxMipLevel());
+        stateCache.bindTexture(texture);
     }
 
     private static int resolveSamplerId(GpuSampler sampler) {
@@ -461,6 +458,97 @@ public final class GpuRenderPath {
 
     private static GpuMesh decodeMeshRef(long ref) {
         return meshMap.get(ref);
+    }
+
+    private static final class RenderStateCache {
+        private final int[] textureIds = new int[8];
+        private final int[] samplerIds = new int[8];
+        private final int[] textureBaseMip = new int[8];
+        private final int[] textureMaxMip = new int[8];
+        private final int[] ssboBases = new int[8];
+        private int activeTexture = -1;
+        private int ssbo = -1;
+        private int program = -1;
+
+        void invalidate() {
+            Arrays.fill(textureIds, Integer.MIN_VALUE);
+            Arrays.fill(samplerIds, Integer.MIN_VALUE);
+            Arrays.fill(textureBaseMip, Integer.MIN_VALUE);
+            Arrays.fill(textureMaxMip, Integer.MIN_VALUE);
+            Arrays.fill(ssboBases, Integer.MIN_VALUE);
+            activeTexture = -1;
+            ssbo = -1;
+            program = -1;
+        }
+
+        void useProgram(int id) {
+            if (program == id) {
+                return;
+            }
+            GlStateManager._glUseProgram(id);
+            program = id;
+        }
+
+        void bindSsbo(int id) {
+            if (ssbo == id) {
+                return;
+            }
+            GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, id);
+            ssbo = id;
+        }
+
+        void bindSsboBase(int index, int id) {
+            if (index >= 0 && index < ssboBases.length && ssboBases[index] == id) {
+                return;
+            }
+            GL43.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, index, id);
+            if (index >= 0 && index < ssboBases.length) {
+                ssboBases[index] = id;
+            }
+        }
+
+        void bindTexture(TextureBinding texture) {
+            int unit = Math.max(0, activeTexture - GL13.GL_TEXTURE0);
+            if (unit >= textureIds.length) {
+                GlStateManager._bindTexture(texture.id);
+                GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, texture.baseMipLevel);
+                GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, texture.maxMipLevel());
+                return;
+            }
+            if (textureIds[unit] != texture.id) {
+                GlStateManager._bindTexture(texture.id);
+                textureIds[unit] = texture.id;
+                textureBaseMip[unit] = Integer.MIN_VALUE;
+                textureMaxMip[unit] = Integer.MIN_VALUE;
+            }
+            int maxMip = texture.maxMipLevel();
+            if (textureBaseMip[unit] != texture.baseMipLevel) {
+                GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, texture.baseMipLevel);
+                textureBaseMip[unit] = texture.baseMipLevel;
+            }
+            if (textureMaxMip[unit] != maxMip) {
+                GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, maxMip);
+                textureMaxMip[unit] = maxMip;
+            }
+        }
+
+        void activeTexture(int texture) {
+            if (activeTexture == texture) {
+                return;
+            }
+            GlStateManager._activeTexture(texture);
+            activeTexture = texture;
+        }
+
+        void bindSampler(int unit, int sampler) {
+            if (unit >= 0 && unit < samplerIds.length && samplerIds[unit] == sampler) {
+                return;
+            }
+            GL33.glBindSampler(unit, sampler);
+            if (unit >= 0 && unit < samplerIds.length) {
+                samplerIds[unit] = sampler;
+            }
+        }
     }
 
     private static final class TextureBinding {

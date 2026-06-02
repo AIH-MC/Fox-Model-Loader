@@ -47,11 +47,11 @@ public class HandRenderFunction extends LivingEntityFunction {
     }
 
     public static HandRenderFunction createWhenSwinging() {
-        return new HandRenderFunction((entity, interactionHand) -> entity.swinging && !entity.isSleeping());
+        return new HandRenderFunction((entity, interactionHand) -> entity.swinging && entity.swingingArm == interactionHand && !entity.isSleeping());
     }
 
     public static HandRenderFunction createWhenUsing() {
-        return new HandRenderFunction((entity, interactionHand) -> entity.isUsingItem() && !entity.isSleeping());
+        return new HandRenderFunction((entity, interactionHand) -> entity.isUsingItem() && entity.getUsedItemHand() == interactionHand && !entity.isSleeping());
     }
 
     @Override

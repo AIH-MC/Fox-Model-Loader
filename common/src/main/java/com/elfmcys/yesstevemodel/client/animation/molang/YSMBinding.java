@@ -228,9 +228,9 @@ public class YSMBinding extends ContextBinding {
         playerEntityVar("nametag_distance", ctx -> ForgeAttributes.getValue(ctx.entity(), ForgeAttributes.nametagDistance(), 64.0D));
         playerEntityVar("in_shield_block_cooldown", YSMBinding::isInShieldBlockCooldown);
 
-        clientPlayerEntityVar("elytra_rot_x", ctx -> Math.toDegrees(0f));
-        clientPlayerEntityVar("elytra_rot_y", ctx -> Math.toDegrees(0f));
-        clientPlayerEntityVar("elytra_rot_z", ctx -> Math.toDegrees(0f));
+        livingEntityVar("elytra_rot_x", YSMBinding::getElytraRotX);
+        livingEntityVar("elytra_rot_y", YSMBinding::getElytraRotY);
+        livingEntityVar("elytra_rot_z", YSMBinding::getElytraRotZ);
 
         localPlayerEntityVar("hit_target_id", YSMBinding::getHitTargetId);
         localPlayerEntityVar("hit_target_type", YSMBinding::getHitTargetType);
@@ -337,6 +337,18 @@ public class YSMBinding extends ContextBinding {
             return 0.0f;
         }
         return -boat.getRowingTime(paddle, context.animationEvent().getPartialTick());
+    }
+
+    private static double getElytraRotX(IContext<LivingEntity> context) {
+        return Math.toDegrees(context.entity().elytraAnimationState.getRotX(context.animationEvent().getPartialTick()));
+    }
+
+    private static double getElytraRotY(IContext<LivingEntity> context) {
+        return Math.toDegrees(context.entity().elytraAnimationState.getRotY(context.animationEvent().getPartialTick()));
+    }
+
+    private static double getElytraRotZ(IContext<LivingEntity> context) {
+        return Math.toDegrees(context.entity().elytraAnimationState.getRotZ(context.animationEvent().getPartialTick()));
     }
 
     private static boolean isBoatChest(IContext<Entity> context) {

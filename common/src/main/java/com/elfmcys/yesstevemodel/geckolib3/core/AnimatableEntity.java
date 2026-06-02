@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.geckolib3.core;
 
+import com.elfmcys.yesstevemodel.client.animation.debug.AnimationFrameProfiler;
 import com.elfmcys.yesstevemodel.audio.IAudioStreamFactory;
 import com.elfmcys.yesstevemodel.client.event.ClientTickEvent;
 import com.elfmcys.yesstevemodel.geckolib3.core.enums.AnimationState;
@@ -58,6 +59,19 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
 
     public float seekTime;
 
+    private int lastAnimationEvaluationFrameId = -1;
+
+    private float lastAnimationEvaluationSeekTime = Float.NaN;
+
+    private boolean lastAnimationEvaluationActive;
+
+    @Nullable
+    private AnimatedGeoModel lastAnimationEvaluationModel;
+
+    private int lastAnimationEvaluationBoneCount;
+
+    private int lastAnimationEvaluationControllerCount;
+
     private final AnimationData manager = new AnimationData();
 
     public float lastTick = -1.0f;
@@ -114,6 +128,12 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
         this.needsReset = false;
         this.wasEvaluatedLastFrame = false;
         this.seekTime = 0.0f;
+        this.lastAnimationEvaluationFrameId = -1;
+        this.lastAnimationEvaluationSeekTime = Float.NaN;
+        this.lastAnimationEvaluationActive = false;
+        this.lastAnimationEvaluationModel = null;
+        this.lastAnimationEvaluationBoneCount = 0;
+        this.lastAnimationEvaluationControllerCount = 0;
         this.animationStates.clear();
     }
 
@@ -303,19 +323,63 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
             boolean z2 = (this.isTickTriggered && !this.hasUpdatedThisTick) || this.wasAnimationActiveLastTick || z;
             boolean z3 = (!z || (this.seekTime == 0.0f && !this.hasUpdatedThisTick)) && this.isTickTriggered && !this.hasUpdatedThisTick;
             resetHeadTracking(this.wasEvaluatedLastFrame);
+            AnimationFrameProfiler.Scope profilerScope = null;
             if (z2) {
                 if (z3) {
                     this.hasUpdatedThisTick = true;
                 }
-                getPhysicsManager().update(this.seekTime);
-                setupAnim(this.seekTime, z3);
-                getEvaluationContext().tickAnimation(event, ctx, z, shouldRenderOverlay());
-                afterSetupAnim(this.seekTime, z3);
-                this.wasAnimationActiveLastTick = z;
+                int renderFrameId = AnimationFrameProfiler.getRenderFrameId();
+                int boneCount = getEvaluationContext().getBoneCount();
+                int controllerCount = this.manager.getAnimationControllers().size();
+                boolean canReuseEvaluation = this.lastAnimationEvaluationFrameId == renderFrameId
+                        && Float.compare(this.lastAnimationEvaluationSeekTime, this.seekTime) == 0
+                        && this.lastAnimationEvaluationActive == z
+                        && this.lastAnimationEvaluationModel == this.currentModel
+                        && this.lastAnimationEvaluationBoneCount == boneCount
+                        && this.lastAnimationEvaluationControllerCount == controllerCount;
+                if (canReuseEvaluation) {
+                    AnimationFrameProfiler.logReusedEvaluation(this, event, this.seekTime);
+                } else {
+                    if (this.lastAnimationEvaluationFrameId == renderFrameId) {
+                        AnimationFrameProfiler.logReuseMiss(this, event, getReuseMissReason(z, boneCount, controllerCount), this.seekTime, this.lastAnimationEvaluationSeekTime, z, this.lastAnimationEvaluationActive, boneCount, this.lastAnimationEvaluationBoneCount, controllerCount, this.lastAnimationEvaluationControllerCount);
+                    }
+                    profilerScope = AnimationFrameProfiler.beginEvaluation(this, event, currentTick, this.seekTime, z, z3, boneCount, controllerCount);
+                    try {
+                        getPhysicsManager().update(this.seekTime);
+                        setupAnim(this.seekTime, z3);
+                        getEvaluationContext().tickAnimation(event, ctx, z, shouldRenderOverlay());
+                        afterSetupAnim(this.seekTime, z3);
+                        this.wasAnimationActiveLastTick = z;
+                        this.lastAnimationEvaluationFrameId = renderFrameId;
+                        this.lastAnimationEvaluationSeekTime = this.seekTime;
+                        this.lastAnimationEvaluationActive = z;
+                        this.lastAnimationEvaluationModel = this.currentModel;
+                        this.lastAnimationEvaluationBoneCount = boneCount;
+                        this.lastAnimationEvaluationControllerCount = controllerCount;
+                    } finally {
+                        AnimationFrameProfiler.endEvaluation(profilerScope);
+                    }
+                }
             }
             applyHeadTracking(event, z2);
             this.wasEvaluatedLastFrame = z2;
         }
+    }
+
+    private String getReuseMissReason(boolean animationActive, int boneCount, int controllerCount) {
+        if (this.lastAnimationEvaluationModel != this.currentModel) {
+            return "model_changed";
+        }
+        if (this.lastAnimationEvaluationBoneCount != boneCount || this.lastAnimationEvaluationControllerCount != controllerCount) {
+            return "shape_changed";
+        }
+        if (Float.compare(this.lastAnimationEvaluationSeekTime, this.seekTime) != 0) {
+            return "seekTime_changed";
+        }
+        if (this.lastAnimationEvaluationActive != animationActive) {
+            return "active_changed";
+        }
+        return "unknown";
     }
 
     public void applyHeadTracking(AnimationEvent<? extends AnimatableEntity<TEntity>> event, boolean z) {
