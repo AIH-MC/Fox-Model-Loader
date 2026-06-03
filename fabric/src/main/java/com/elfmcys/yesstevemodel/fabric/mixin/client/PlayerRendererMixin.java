@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.fabric.mixin.client;
 
+import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.event.ReplacePlayerRenderEvent;
 import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
 import com.elfmcys.yesstevemodel.mixin.client.MinecraftAccessor;
@@ -26,7 +27,7 @@ public abstract class PlayerRendererMixin {
         if (state instanceof AvatarRenderState avatarState && Minecraft.getInstance().level != null) {
             net.minecraft.world.entity.Entity entity = Minecraft.getInstance().level.getEntity(avatarState.id);
             if (entity instanceof AbstractClientPlayer player) {
-                float partialTick = ((MinecraftAccessor) Minecraft.getInstance()).ysm$getDeltaTracker().getGameTimeDeltaTicks();
+                float partialTick = ((MinecraftAccessor) Minecraft.getInstance()).ysm$getDeltaTracker().getGameTimeDeltaPartialTick(false);
                 int packedLight = ((MinecraftAccessor) Minecraft.getInstance()).ysm$getEntityRenderDispatcher().getPackedLightCoords(player, partialTick);
                 boolean preview = ModelPreviewRenderer.isPreview();
                 float yaw = preview ? state.bodyRot : state.yRot;
@@ -51,11 +52,18 @@ public abstract class PlayerRendererMixin {
                     player.yHeadRot = headRot;
                     player.yHeadRotO = headRot;
                 }
+                PlayerCapability capability = PlayerCapability.get(player).orElse(null);
+                if (capability != null) {
+                    capability.beginRenderState(avatarState);
+                }
                 try {
                     if (ReplacePlayerRenderEvent.onRenderPlayerPre(player, yaw, partialTick, poseStack, ((MinecraftAccessor) Minecraft.getInstance()).ysm$renderBuffers().bufferSource(), collector, packedLight)) {
                         ci.cancel();
                     }
                 } finally {
+                    if (capability != null) {
+                        capability.endRenderState();
+                    }
                     if (preview) {
                         player.yBodyRot = oldBodyRot;
                         player.yBodyRotO = oldBodyRotO;

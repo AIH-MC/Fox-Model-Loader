@@ -22,7 +22,7 @@ public class WorldRendererMixin {
     private void renderLevelPre(GraphicsResourceAllocator allocator, DeltaTracker deltaTracker, boolean renderBlockOutline, CameraRenderState cameraState, Matrix4fc projectionMatrix, GpuBufferSlice fogBuffer, Vector4f fogColor, boolean renderSky, ChunkSectionsToRender chunkSectionsToRender, CallbackInfo ci) {
         if (YesSteveModel.isAvailable()) {
             ModelPreviewRenderer.setWorldRenderMode(true);
-            EntityRenderCache.tick(deltaTracker.getGameTimeDeltaTicks());
+            EntityRenderCache.tick(deltaTracker.getGameTimeDeltaPartialTick(false));
         }
     }
 

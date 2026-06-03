@@ -29,6 +29,7 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
@@ -72,6 +73,18 @@ public final class PlayerCapability extends CustomPlayerEntity {
 
     private Struct serverVarContainer;
 
+    private boolean hasRenderState;
+
+    private float renderStateWalkAnimationSpeed;
+
+    private float renderStateWalkAnimationPos;
+
+    private float renderStateBodyRot;
+
+    private float renderStateNetHeadYaw;
+
+    private float renderStateHeadPitch;
+
     public PlayerCapability(Player player) {
         super(player, player instanceof LocalPlayer, true);
         this.molangVarsMap = new Int2ReferenceOpenHashMap<>(8);
@@ -90,6 +103,43 @@ public final class PlayerCapability extends CustomPlayerEntity {
     @Nullable
     public Struct getServerVarContainer() {
         return this.serverVarContainer;
+    }
+
+    public void beginRenderState(AvatarRenderState renderState) {
+        this.hasRenderState = true;
+        this.renderStateWalkAnimationSpeed = renderState.walkAnimationSpeed;
+        this.renderStateWalkAnimationPos = renderState.walkAnimationPos;
+        this.renderStateBodyRot = renderState.bodyRot;
+        this.renderStateNetHeadYaw = renderState.yRot;
+        this.renderStateHeadPitch = renderState.xRot;
+    }
+
+    public void endRenderState() {
+        this.hasRenderState = false;
+    }
+
+    public boolean hasRenderState() {
+        return this.hasRenderState;
+    }
+
+    public float getRenderStateWalkAnimationSpeed() {
+        return this.renderStateWalkAnimationSpeed;
+    }
+
+    public float getRenderStateWalkAnimationPos() {
+        return this.renderStateWalkAnimationPos;
+    }
+
+    public float getRenderStateBodyRot() {
+        return this.renderStateBodyRot;
+    }
+
+    public float getRenderStateNetHeadYaw() {
+        return this.renderStateNetHeadYaw;
+    }
+
+    public float getRenderStateHeadPitch() {
+        return this.renderStateHeadPitch;
     }
 
     @Override

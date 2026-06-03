@@ -10,7 +10,7 @@ import com.elfmcys.yesstevemodel.geckolib3.core.molang.binding.ContextBinding;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.builtin.query.*;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.context.IContext;
 import com.elfmcys.yesstevemodel.geckolib3.util.MolangUtils;
-import com.elfmcys.yesstevemodel.geckolib3.core.EntityFrameStateTracker;
+import com.elfmcys.yesstevemodel.geckolib3.util.MovementQuery;
 import com.elfmcys.yesstevemodel.util.CameraUtil;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
@@ -60,15 +60,15 @@ public class QueryBinding extends ContextBinding {
         var("moon_phase", ctx -> getMoonPhase(ctx.level().getDefaultClockTime()));
         var("time_of_day", ctx -> MolangUtils.normalizeTime(ctx.level().getDefaultClockTime()));
         var("time_stamp", ctx -> ctx.level().getDefaultClockTime());
-        var("delta_time", ctx -> ctx.geoInstance().getPositionTracker().getTimeDelta() / 20.0f);
+        var("delta_time", ctx -> MovementQuery.getTimeDeltaSeconds(ctx.geoInstance().getPositionTracker()));
 
         entityVar("yaw_speed", QueryBinding::getYawSpeed);
         entityVar("cardinal_facing_2d", ctx -> ctx.entity().getDirection().get3DDataValue());
         entityVar("distance_from_camera", QueryBinding::getDistanceFromCamera);
         entityVar("eye_target_x_rotation", ctx -> ctx.entity().getViewXRot(ctx.animationEvent().getPartialTick()));
         entityVar("eye_target_y_rotation", ctx -> ctx.entity().getViewYRot(ctx.animationEvent().getPartialTick()));
-        entityVar("ground_speed", ctx -> getGroundSpeed(ctx.entity()));
-        entityVar("modified_distance_moved", ctx -> 0f);
+        entityVar("ground_speed", ctx -> MovementQuery.getGroundSpeed(ctx.entity(), ctx.geoInstance().getPositionTracker(), ctx.animationEvent()));
+        entityVar("modified_distance_moved", ctx -> ctx.entity().moveDist);
         entityVar("vertical_speed", QueryBinding::getVerticalSpeed);
         entityVar("walk_distance", ctx -> ctx.entity().moveDist);
         entityVar("has_rider", ctx -> ctx.entity().isVehicle());
@@ -185,19 +185,13 @@ public class QueryBinding extends ContextBinding {
         return 20.0f * (context.entity().getYRot() - context.entity().yRotO);
     }
 
-    private static float getGroundSpeed(Entity entity) {
-        Vec3 deltaMovement = entity.getDeltaMovement();
-        return 20.0f * Mth.sqrt((float) ((deltaMovement.x * deltaMovement.x) + (deltaMovement.z * deltaMovement.z)));
-    }
-
     private static float getDistanceFromCamera(IContext<Entity> context) {
         Vec3 cameraPosition = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         return Mth.sqrt((float) context.entity().distanceToSqr(cameraPosition));
     }
 
     private static float getVerticalSpeed(IContext<Entity> context) {
-        EntityFrameStateTracker<?> positionTracker = context.geoInstance().getPositionTracker();
-        return (20.0f * ((float) positionTracker.getPositionDelta().y)) / positionTracker.getTimeDelta();
+        return MovementQuery.getVerticalSpeed(context.entity(), context.geoInstance().getPositionTracker());
     }
 
     private static float getCapeFlapAmount(IContext<Player> context) {

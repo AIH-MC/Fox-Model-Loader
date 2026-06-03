@@ -16,8 +16,8 @@ import com.elfmcys.yesstevemodel.geckolib3.util.MathInterpolation;
 import com.elfmcys.yesstevemodel.mixin.client.ArrowEntityAccessor;
 import com.elfmcys.yesstevemodel.mixin.client.FishingHookAccessor;
 import com.elfmcys.yesstevemodel.mixin.client.ThrowableItemProjectileAccessor;
-import com.elfmcys.yesstevemodel.geckolib3.core.EntityFrameStateTracker;
 import com.elfmcys.yesstevemodel.util.CameraUtil;
+import com.elfmcys.yesstevemodel.geckolib3.util.MovementQuery;
 import com.elfmcys.yesstevemodel.util.data.LazySupplier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.Minecraft;
@@ -100,7 +100,7 @@ public class YSMBinding extends ContextBinding {
         var("weather", ctx -> getWeather(ctx.level()));
         var("dimension_name", ctx -> ctx.level().dimension().registry().toString());
         var("fps", ctx -> Minecraft.getInstance().getFps());
-        var("time_delta", ctx -> ctx.geoInstance().getPositionTracker().getTimeDelta() / 20.0f);
+        var("time_delta", ctx -> MovementQuery.getTimeDeltaSeconds(ctx.geoInstance().getPositionTracker()));
         entityVar("ground_speed2", YSMBinding::getGroundSpeed2);
 
         entityVar("input_vertical", MathInterpolation::getYawInterpolation);
@@ -321,9 +321,7 @@ public class YSMBinding extends ContextBinding {
     }
 
     private static float getGroundSpeed2(IContext<Entity> context) {
-        EntityFrameStateTracker<?> c0269x82e473c1Mo1215x3cfc56ba = context.geoInstance().getPositionTracker();
-        Vec3 vec3M1419xc2097f01 = c0269x82e473c1Mo1215x3cfc56ba.getPositionDelta();
-        return (20.0f * Mth.sqrt((float) ((vec3M1419xc2097f01.x * vec3M1419xc2097f01.x) + (vec3M1419xc2097f01.z * vec3M1419xc2097f01.z)))) / c0269x82e473c1Mo1215x3cfc56ba.getTimeDelta();
+        return MovementQuery.getGroundSpeed(context.entity(), context.geoInstance().getPositionTracker(), context.animationEvent());
     }
 
     private static boolean getBoatPaddleState(IContext<Entity> context, int paddle) {

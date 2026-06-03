@@ -35,7 +35,7 @@ public class ReplacePlayerHandRenderEvent {
                 if (context == null || !hasArmBone(arm, context.getAnimationBundle().getArmModel())) {
                     return;
                 }
-                RendererManager.getHandRenderer().renderHandItem(localPlayer, context, cap, arm, poseStack, collector, packedLight, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaTicks());
+                RendererManager.getHandRenderer().renderHandItem(localPlayer, context, cap, arm, poseStack, collector, packedLight, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
                 cancelled[0] = true;
             });
         } catch (Exception e) {

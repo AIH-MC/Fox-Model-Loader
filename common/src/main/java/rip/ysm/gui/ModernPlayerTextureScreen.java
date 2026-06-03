@@ -323,7 +323,7 @@ public class ModernPlayerTextureScreen extends OptionScreen {
             modelHolder.initModelWithTexture(modelId, cap.getCurrentTextureName());
             float cx = (previewLeft + previewRight) / 2.0f + offsetX;
             float cy = previewTop + (previewBottom - previewTop) * 0.65f + offsetY;
-            ModelPreviewRenderer.renderEntityPreview(g, previewLeft, previewTop, previewRight, previewBottom, cx, cy, zoom, pitch, yaw, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaTicks(), modelHolder, RendererManager.getPlayerRenderer(), showGround);
+            ModelPreviewRenderer.renderEntityPreview(g, previewLeft, previewTop, previewRight, previewBottom, cx, cy, zoom, pitch, yaw, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false), modelHolder, RendererManager.getPlayerRenderer(), showGround);
         });
         g.disableScissor();
     }
