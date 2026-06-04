@@ -10,6 +10,7 @@
   "client": [
     "client.PlayerRendererHandMixin",
     "client.PlayerRendererMixin",
+    "client.WingsLayerMixin",
     "client.YSMSoundInstanceFabricMixin",
     "client.KeyboardHandlerMixin",
     "client.MouseHandlerMixin"

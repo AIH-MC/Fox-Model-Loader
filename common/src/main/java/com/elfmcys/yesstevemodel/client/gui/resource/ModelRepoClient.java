@@ -31,6 +31,7 @@ public final class ModelRepoClient {
     private static final String USER_AGENT = "OpenYSM-ResourceStation";
     private static final String GITHUB_ACCEPT = "application/vnd.github+json";
     private static final String GITHUB_API_VERSION = "2022-11-28";
+    private static final String CACHE_BUSTER_PARAM = "ysm_refresh";
     private static final Pattern HREF_PATTERN = Pattern.compile("href=\"([^\"]+)\"");
     private static final int PROBE_BYTES = 64 * 1024;
     private static final int PROBE_TIMEOUT_MS = 2500;
@@ -178,36 +179,18 @@ public final class ModelRepoClient {
         GithubPath path = GithubPath.parse(uri);
         monitor(config, "GitHub list parsed owner={} repo={} branch={} path={}", path.owner(), path.repo(), path.branch(), path.path());
         List<ModelRepoEntry> entries = new ArrayList<>();
-        boolean explicitBranch = !path.branch().isBlank();
         Exception primaryError = null;
         if (path.branch().isBlank()) {
-            path = path.withBranch(config.preferGithubAccelerator() ? "main" : resolveDefaultBranch(path.owner(), path.repo(), config));
+            path = path.withBranch(resolveDefaultBranch(path.owner(), path.repo(), config));
             monitor(config, "GitHub initial branch owner={} repo={} branch={} preferAccelerator={}",
                     path.owner(), path.repo(), path.branch(), config.preferGithubAccelerator());
         }
-        if (config.preferGithubAccelerator()) {
-            primaryError = tryListJsDelivrFlat(path, config, entries, primaryError, "primary");
-            if (entries.isEmpty() && !explicitBranch) {
-                GithubPath defaultPath = path.withBranch(resolveDefaultBranch(path.owner(), path.repo(), config));
-                if (!defaultPath.branch().equals(path.branch())) {
-                    Exception defaultBranchError = tryListJsDelivrFlat(defaultPath, config, entries, null, "default-branch");
-                    primaryError = suppress(primaryError, defaultBranchError);
-                    if (!entries.isEmpty()) {
-                        path = defaultPath;
-                    }
-                }
-            }
-            if (entries.isEmpty()) {
-                listGithubFallbacks(path, config, entries, primaryError, true);
-            }
-        } else {
-            primaryError = tryListGithubTree(path, config, entries, primaryError, "primary");
-            if (entries.isEmpty()) {
-                primaryError = tryListJsDelivrFlat(path, config, entries, primaryError, "fallback");
-            }
-            if (entries.isEmpty()) {
-                listGithubFallbacks(path, config, entries, primaryError, false);
-            }
+        primaryError = tryListGithubTree(path, config, entries, primaryError, "primary");
+        if (entries.isEmpty()) {
+            primaryError = tryListJsDelivrFlat(path, config, entries, primaryError, "fallback");
+        }
+        if (entries.isEmpty()) {
+            listGithubFallbacks(path, config, entries, primaryError, false);
         }
         monitor(config, "GitHub list complete owner={} repo={} branch={} path={} entries={}", path.owner(), path.repo(), path.branch(), path.path(), entries.size());
         return entries;
@@ -498,11 +481,19 @@ public final class ModelRepoClient {
 
     private static byte[] read(String url, int timeoutMs, int maxBytes, ProgressListener listener, ResourceStationConfig.State config, String operation, long expectedBytes) throws IOException {
         long start = System.nanoTime();
-        HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        boolean bypassCache = shouldBypassCache(operation);
+        String requestUrl = bypassCache ? withCacheBuster(url) : url;
+        HttpURLConnection connection = (HttpURLConnection) URI.create(requestUrl).toURL().openConnection();
         try {
             connection.setConnectTimeout(timeoutMs);
             connection.setReadTimeout(timeoutMs);
+            connection.setUseCaches(false);
             connection.setRequestProperty("User-Agent", USER_AGENT);
+            if (bypassCache) {
+                connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");
+                connection.setRequestProperty("Pragma", "no-cache");
+                connection.setRequestProperty("Expires", "0");
+            }
             if (url.contains("api.github.com")) {
                 connection.setRequestProperty("Accept", GITHUB_ACCEPT);
                 connection.setRequestProperty("X-GitHub-Api-Version", GITHUB_API_VERSION);
@@ -595,16 +586,13 @@ public final class ModelRepoClient {
 
     private static List<String> githubApiCandidates(String url, ResourceStationConfig.State config) {
         Set<String> candidates = new LinkedHashSet<>();
-        if (!config.preferGithubAccelerator()) {
-            candidates.add(url);
-        }
+        candidates.add(url);
         for (String prefix : config.githubAccelerators()) {
             String normalized = normalizeProxyPrefix(prefix);
             if (!normalized.isBlank()) {
                 candidates.add(normalized + url);
             }
         }
-        candidates.add(url);
         return new ArrayList<>(candidates);
     }
 
@@ -704,6 +692,27 @@ public final class ModelRepoClient {
         }
         String trimmed = prefix.trim();
         return trimmed.endsWith("/") ? trimmed : trimmed + "/";
+    }
+
+    private static boolean shouldBypassCache(String operation) {
+        return "index".equals(operation)
+                || "preview".equals(operation)
+                || "github-json".equals(operation)
+                || "github-read".equals(operation)
+                || "github-archive".equals(operation)
+                || operation != null && operation.startsWith("jsdelivr");
+    }
+
+    private static String withCacheBuster(String url) {
+        String base = url;
+        String fragment = "";
+        int fragmentIndex = base.indexOf('#');
+        if (fragmentIndex >= 0) {
+            fragment = base.substring(fragmentIndex);
+            base = base.substring(0, fragmentIndex);
+        }
+        char separator = base.contains("?") ? '&' : '?';
+        return base + separator + CACHE_BUSTER_PARAM + '=' + System.currentTimeMillis() + fragment;
     }
 
     private static boolean isGithubRelated(String url) {

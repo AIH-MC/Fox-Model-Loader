@@ -129,6 +129,10 @@
   "gui.yes_steve_model.config.animation_frame_profiler.desc": "收集动画时间、计算次数和耗时诊断信息。仅建议测试时开启。",
   "gui.yes_steve_model.config.animation_debug_log": "动画详细调试日志",
   "gui.yes_steve_model.config.animation_debug_log.desc": "为每次动画计算输出详细 [YSM-ANIM] 日志。需要先开启动画帧分析日志。",
+  "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator": "无 ElytraLocator 模型的后备鞘翅",
+  "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator.desc": "实验性功能。模型没有 ElytraLocator 时，使用接近原版的方式渲染鞘翅。",
+  "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models": "重新启用默认/杂项/嵌套 Elytra 模型鞘翅",
+  "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models.desc": "实验性功能。允许 default、misc 内置模型，以及 ElytraLocator 挂在 Elytra 显示骨下的模型再次渲染鞘翅。",
   "gui.yes_steve_model.config.warn_repeated_animation_evaluation": "重复动画计算警告",
   "gui.yes_steve_model.config.warn_repeated_animation_evaluation.desc": "同一实体在同一渲染帧内重复计算动画时输出警告。",
   "gui.yes_steve_model.config.release_texture_bytes_after_upload": "纹理上传后释放字节缓存",
@@ -631,5 +635,16 @@
   "gui.yes_steve_model.model_select.category_deleted_keep_models": "已删除分类 %s，并保留其中模型（%s 组文件夹）",
   "gui.yes_steve_model.model_select.error.category": "分类名无效",
   "gui.yes_steve_model.model_select.error.file": "文件操作失败：%s"
+,
+  "gui.yes_steve_model.config.group.debug": "\u8c03\u8bd5",
+  "gui.yes_steve_model.config.loading_state_position.value.top_left": "\u5de6\u4e0a",
+  "gui.yes_steve_model.config.loading_state_position.value.top_center": "\u9876\u90e8\u5c45\u4e2d",
+  "gui.yes_steve_model.config.loading_state_position.value.top_right": "\u53f3\u4e0a",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_left": "\u5de6\u4e0b",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_center": "\u5e95\u90e8\u5c45\u4e2d",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_right": "\u53f3\u4e0b",
+  "gui.yes_steve_model.resource_station.download_page.tasks": "\u4efb\u52a1",
+  "gui.yes_steve_model.resource_station.download_page.finished": "\u5df2\u5b8c\u6210",
+  "gui.yes_steve_model.resource_station.download_page.no_finished": "\u6ca1\u6709\u5df2\u5b8c\u6210\u7684\u4e0b\u8f7d"
 }
 

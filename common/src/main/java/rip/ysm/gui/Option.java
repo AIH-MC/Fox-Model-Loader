@@ -46,6 +46,10 @@ public class Option<T> {
         return Component.translatable("gui.yes_steve_model.config." + translationKey);
     }
 
+    public String getTranslationKey() {
+        return translationKey;
+    }
+
     public Component getDescription() {
         String descKey = "gui.yes_steve_model.config." + translationKey + ".desc";
         return Component.translatable(descKey);

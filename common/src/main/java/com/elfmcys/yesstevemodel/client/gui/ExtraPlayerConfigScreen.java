@@ -40,13 +40,17 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
                 .add(new RadioOptionRow(0, 0, 0, 22, rendererOption(), rendererLabels()))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("disable_model_glow_in_shaderpack", GeneralConfig.DISABLE_MODEL_GLOW_IN_SHADERPACK)));
 
-        OptionGroup experimentalTesting = new OptionGroup("experimental_testing")
+        OptionGroup debug = new OptionGroup("debug")
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("model_memory_profiler", GeneralConfig.MODEL_MEMORY_PROFILER)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_frame_profiler", GeneralConfig.ANIMATION_FRAME_PROFILER)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_debug_log", GeneralConfig.ANIMATION_DEBUG_LOG)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("warn_repeated_animation_evaluation", GeneralConfig.WARN_REPEATED_ANIMATION_EVALUATION)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("resource_station_monitor_log", GeneralConfig.RESOURCE_STATION_MONITOR_LOG)));
+
+        OptionGroup experimentalTesting = new OptionGroup("experimental_testing")
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("experimental_fallback_elytra_without_locator", GeneralConfig.EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("experimental_enable_elytra_for_default_and_misc_models", GeneralConfig.EXPERIMENTAL_ENABLE_ELYTRA_FOR_DEFAULT_AND_MISC_MODELS)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("release_texture_bytes_after_upload", GeneralConfig.RELEASE_TEXTURE_BYTES_AFTER_UPLOAD)))
-                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("resource_station_monitor_log", GeneralConfig.RESOURCE_STATION_MONITOR_LOG)))
                 .add(new SliderOptionRow(0, 0, 0, 22, intOption("max_cached_gpu_models", GeneralConfig.MAX_CACHED_GPU_MODELS), 0.0d, 128.0d, 1.0d, ""))
                 .add(new SliderOptionRow(0, 0, 0, 22, intOption("unused_model_ttl_seconds", GeneralConfig.UNUSED_MODEL_TTL_SECONDS), 30.0d, 1800.0d, 30.0d, "s"));
 
@@ -58,6 +62,7 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
         groups.add(general);
         groups.add(rendering);
         groups.add(performance);
+        groups.add(debug);
         groups.add(experimentalTesting);
         groups.add(misc);
     }

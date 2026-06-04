@@ -43,8 +43,8 @@ public class ResourceStationScreen extends Screen {
     private static final int MIN_PANEL_HEIGHT = 220;
     private static final int MAX_PANEL_HEIGHT = 420;
     private static final int HEADER_HEIGHT = 56;
-    private static final int COMPACT_HEADER_HEIGHT = 78;
-    private static final int FOOTER_HEIGHT = 45;
+    private static final int COMPACT_HEADER_HEIGHT = 100;
+    private static final int FOOTER_HEIGHT = 58;
     private static final int ENTRY_HEIGHT = 32;
     private static final int ENTRY_BUTTON_AREA_WIDTH = 92;
     private static final ExecutorService RESOURCE_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
@@ -97,16 +97,22 @@ public class ResourceStationScreen extends Screen {
         boolean urlFocused = this.urlBox != null && this.urlBox.isFocused();
         boolean searchFocused = this.searchBox != null && this.searchBox.isFocused();
 
-        int labelWidth = Math.min(52, Math.max(42, this.guiWidth / 8));
-        int topButtonY = this.guiTop + 7;
-        int navRight = this.guiLeft + this.guiWidth - 10;
-        int nextX = navRight - 18;
-        int prevX = nextX - 22;
-        int deleteX = prevX - 38;
-        int saveX = deleteX - 38;
-        int refreshX = saveX - 46;
-        int urlX = this.guiLeft + 10 + labelWidth;
-        int urlW = Math.max(70, refreshX - urlX - 6);
+        int labelWidth = labelWidth();
+        int contentLeft = this.guiLeft + 10;
+        int contentRight = this.guiLeft + this.guiWidth - 10;
+        boolean compactHeader = compactHeader();
+        Component refreshLabel = Component.translatable("gui.yes_steve_model.resource_station.refresh");
+        Component saveLabel = Component.translatable("gui.yes_steve_model.resource_station.save");
+        Component deleteLabel = Component.translatable("gui.yes_steve_model.resource_station.delete_source");
+        int refreshW = buttonWidth(refreshLabel, 42, 64);
+        int saveW = buttonWidth(saveLabel, 34, 54);
+        int deleteW = buttonWidth(deleteLabel, 34, 60);
+        int sourceNavW = 18;
+        int topControlsWidth = refreshW + saveW + deleteW + sourceNavW * 2 + 16;
+        int topButtonY = compactHeader ? this.guiTop + 29 : this.guiTop + 7;
+        int topControlsX = compactHeader ? contentLeft : contentRight - topControlsWidth;
+        int urlX = contentLeft + labelWidth;
+        int urlW = compactHeader ? Math.max(80, contentRight - urlX) : Math.max(80, topControlsX - urlX - 6);
         this.urlBox = new EditBox(this.font, urlX, this.guiTop + 8, urlW, 16, Component.literal("Resource URL"));
         this.urlBox.setMaxLength(2048);
         this.urlBox.setValue(urlValue);
@@ -114,9 +120,18 @@ public class ResourceStationScreen extends Screen {
         this.urlBox.setFocused(urlFocused);
         addWidget(this.urlBox);
 
+        Component sortLabel = Component.translatable("gui.yes_steve_model.resource_station.sort");
+        Component queueAllLabel = Component.translatable("gui.yes_steve_model.resource_station.queue_all");
+        int sortW = buttonWidth(sortLabel, 52, 64);
+        int queueAllW = buttonWidth(queueAllLabel, 62, 86);
         int searchX = urlX;
-        int searchW = Math.max(84, Math.min(180, this.guiWidth / 3));
-        this.searchBox = new EditBox(this.font, searchX, this.guiTop + 30, searchW, 16, Component.literal("Search"));
+        int searchY = compactHeader ? this.guiTop + 52 : this.guiTop + 30;
+        int modeWidth = compactHeader ? Math.min(180, this.guiWidth - 20) : 156;
+        int modeX = compactHeader ? contentLeft : contentRight - modeWidth;
+        int searchControlsRight = compactHeader ? contentRight : modeX - 6;
+        int maxSearchW = compactHeader ? 160 : 180;
+        int searchW = Math.min(maxSearchW, Math.max(70, searchControlsRight - searchX - sortW - queueAllW - 14));
+        this.searchBox = new EditBox(this.font, searchX, searchY, searchW, 16, Component.literal("Search"));
         this.searchBox.setMaxLength(2048);
         this.searchBox.setValue(searchValue);
         this.searchBox.setTextColor(0xFFF3F3E0);
@@ -128,20 +143,23 @@ public class ResourceStationScreen extends Screen {
             setFocused(this.urlBox);
         }
 
-        addRenderableWidget(new FlatColorButton(refreshX, topButtonY, 42, 18, Component.translatable("gui.yes_steve_model.resource_station.refresh"), b -> refresh()));
-        addRenderableWidget(new FlatColorButton(saveX, topButtonY, 34, 18, Component.translatable("gui.yes_steve_model.resource_station.save"), b -> saveUrl()));
-        addRenderableWidget(new FlatColorButton(deleteX, topButtonY, 34, 18, Component.translatable("gui.yes_steve_model.resource_station.delete_source"), b -> deleteSource()));
-        addRenderableWidget(new FlatColorButton(prevX, topButtonY, 18, 18, Component.literal("<"), b -> switchSource(-1)).setTooltipText("gui.yes_steve_model.resource_station.prev_source"));
-        addRenderableWidget(new FlatColorButton(nextX, topButtonY, 18, 18, Component.literal(">"), b -> switchSource(1)).setTooltipText("gui.yes_steve_model.resource_station.next_source"));
-        FlatColorButton sortButton = new FlatColorButton(searchX + searchW + 6, this.guiTop + 29, 52, 18, Component.translatable("gui.yes_steve_model.resource_station.sort"), b -> cycleSort());
+        int topX = topControlsX;
+        addRenderableWidget(new FlatColorButton(topX, topButtonY, refreshW, 18, refreshLabel, b -> refresh()));
+        topX += refreshW + 4;
+        addRenderableWidget(new FlatColorButton(topX, topButtonY, saveW, 18, saveLabel, b -> saveUrl()));
+        topX += saveW + 4;
+        addRenderableWidget(new FlatColorButton(topX, topButtonY, deleteW, 18, deleteLabel, b -> deleteSource()));
+        topX += deleteW + 4;
+        addRenderableWidget(new FlatColorButton(topX, topButtonY, sourceNavW, 18, Component.literal("<"), b -> switchSource(-1)).setTooltipText("gui.yes_steve_model.resource_station.prev_source"));
+        topX += sourceNavW + 4;
+        addRenderableWidget(new FlatColorButton(topX, topButtonY, sourceNavW, 18, Component.literal(">"), b -> switchSource(1)).setTooltipText("gui.yes_steve_model.resource_station.next_source"));
+        int sortX = searchX + searchW + 6;
+        FlatColorButton sortButton = new FlatColorButton(sortX, searchY - 1, sortW, 18, sortLabel, b -> cycleSort());
         sortButton.setTooltipLines(List.of(Component.translatable("gui.yes_steve_model.resource_station.sort_mode", this.sortMode.label())));
         addRenderableWidget(sortButton);
-        addRenderableWidget(new FlatColorButton(searchX + searchW + 62, this.guiTop + 29, 62, 18, Component.translatable("gui.yes_steve_model.resource_station.queue_all"), b -> enqueueAllVisible()));
+        addRenderableWidget(new FlatColorButton(sortX + sortW + 4, searchY - 1, queueAllW, 18, queueAllLabel, b -> enqueueAllVisible()));
 
-        boolean compactHeader = compactHeader();
-        int modeWidth = compactHeader ? Math.min(156, this.guiWidth - 20) : 156;
-        int modeX = compactHeader ? this.guiLeft + 10 : this.guiLeft + this.guiWidth - modeWidth - 10;
-        int modeY = compactHeader ? this.guiTop + 52 : this.guiTop + 29;
+        int modeY = compactHeader ? this.guiTop + 75 : this.guiTop + 29;
         int nativeWidth = modeWidth / 2;
         int mainlandWidth = modeWidth - nativeWidth;
         this.nativeModeButton = new FlatColorButton(modeX, modeY, nativeWidth, 18, Component.translatable("gui.yes_steve_model.resource_station.mode.native"), b -> setMainlandMode(false));
@@ -154,15 +172,24 @@ public class ResourceStationScreen extends Screen {
         addRenderableWidget(this.mainlandModeButton);
 
         int footerY = footerButtonY();
-        addRenderableWidget(new FlatColorButton(this.guiLeft + this.guiWidth - 68, footerY, 58, 16, Component.translatable("gui.yes_steve_model.model.return"), b -> Minecraft.getInstance().setScreen(this.parentScreen)));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + this.guiWidth - 132, footerY, 58, 16, Component.translatable("gui.yes_steve_model.resource_station.download_page"), b -> Minecraft.getInstance().setScreen(new DownloadScreen(this.parentScreen, this))));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + Math.max(10, this.guiWidth / 2 - 40), footerY, 52, 16, Component.translatable("gui.yes_steve_model.pre_page"), b -> {
+        Component returnLabel = Component.translatable("gui.yes_steve_model.model.return");
+        Component downloadPageLabel = Component.translatable("gui.yes_steve_model.resource_station.download_page");
+        Component preLabel = Component.translatable("gui.yes_steve_model.pre_page");
+        Component nextLabel = Component.translatable("gui.yes_steve_model.next_page");
+        int returnW = buttonWidth(returnLabel, 58, 78);
+        int downloadPageW = buttonWidth(downloadPageLabel, 58, 78);
+        int preW = buttonWidth(preLabel, 52, 58);
+        int nextW = buttonWidth(nextLabel, 52, 58);
+        int centerX = this.guiLeft + this.guiWidth / 2;
+        addRenderableWidget(new FlatColorButton(contentRight - returnW, footerY, returnW, 16, returnLabel, b -> Minecraft.getInstance().setScreen(this.parentScreen)));
+        addRenderableWidget(new FlatColorButton(contentLeft, footerY, downloadPageW, 16, downloadPageLabel, b -> Minecraft.getInstance().setScreen(new DownloadScreen(this.parentScreen, this))));
+        addRenderableWidget(new FlatColorButton(centerX - preW - 14, footerY, preW, 16, preLabel, b -> {
             if (this.page > 0) {
                 this.page--;
                 init();
             }
         }));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + Math.min(this.guiWidth - 130, this.guiWidth / 2 + 72), footerY, 52, 16, Component.translatable("gui.yes_steve_model.next_page"), b -> {
+        addRenderableWidget(new FlatColorButton(centerX + 14, footerY, nextW, 16, nextLabel, b -> {
             int maxPage = maxPage(filteredEntries().size());
             if (this.page < maxPage) {
                 this.page++;
@@ -181,8 +208,8 @@ public class ResourceStationScreen extends Screen {
             ModelRepoEntry entry = visible.get(index);
             int y = entryY(i);
             int buttonX = entryButtonX();
-            int retryW = this.guiWidth >= 420 ? 44 : 32;
-            int downloadW = this.guiWidth >= 420 ? 44 : 42;
+            int retryW = retryButtonWidth();
+            int downloadW = downloadButtonWidth();
             addRenderableWidget(new FlatColorButton(buttonX, y + 5, downloadW, 18, Component.translatable("gui.yes_steve_model.resource_station.download"), b -> enqueue(entry)));
             addRenderableWidget(new FlatColorButton(buttonX + downloadW + 4, y + 5, retryW, 18, Component.translatable("gui.yes_steve_model.resource_station.retry"), b -> enqueue(entry)));
             ensurePreview(entry);
@@ -453,8 +480,9 @@ public class ResourceStationScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float partialTick) {
         extractTransparentBackground(extractor);
         extractor.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + this.guiWidth, this.guiTop + this.guiHeight, -14540254, -14540254);
-        extractor.text(this.font, Component.translatable("gui.yes_steve_model.resource_station.url"), this.guiLeft + 10, this.guiTop + 12, 0xFFF3F3E0);
-        extractor.text(this.font, Component.translatable("gui.yes_steve_model.resource_station.search"), this.guiLeft + 10, this.guiTop + 34, 0xFFF3F3E0);
+        int labelWidth = labelWidth() - 4;
+        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.url"), labelWidth, this.guiLeft + 10, this.guiTop + 12, 0xFFF3F3E0);
+        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.search"), labelWidth, this.guiLeft + 10, compactHeader() ? this.guiTop + 56 : this.guiTop + 34, 0xFFF3F3E0);
         this.urlBox.extractWidgetRenderState(extractor, mouseX, mouseY, partialTick);
         this.searchBox.extractWidgetRenderState(extractor, mouseX, mouseY, partialTick);
         List<ModelRepoEntry> visible = filteredEntries();
@@ -471,12 +499,12 @@ public class ResourceStationScreen extends Screen {
         }
         int maxPage = maxPage(visible.size());
         Component pageText = Component.literal((this.page + 1) + "/" + (maxPage + 1));
-        int footerY = this.guiTop + this.guiHeight - 21;
-        extractor.text(this.font, pageText, this.guiLeft + this.guiWidth / 2 + 18, footerY + 4, 0xFFF3F3E0);
+        int footerY = footerButtonY();
+        extractor.text(this.font, pageText, this.guiLeft + (this.guiWidth - this.font.width(pageText)) / 2, footerY - 16, 0xFFF3F3E0);
         renderQueueStatus(extractor);
         if (!Objects.equals(this.status, Component.empty())) {
             int statusWidth = Math.max(90, this.guiWidth / 2 - 16);
-            drawFirstLine(extractor, this.status.copy().withStyle(this.statusColor), statusWidth, this.guiLeft + 12, footerY + 4, 0xFFF3F3E0);
+            drawFirstLine(extractor, this.status.copy().withStyle(this.statusColor), statusWidth, this.guiLeft + 12, footerY - 16, 0xFFF3F3E0);
         }
         super.extractRenderState(extractor, mouseX, mouseY, partialTick);
         ((ScreenAccessor) this).ysm$getRenderables().stream().filter(renderable -> renderable instanceof FlatColorButton).forEach(renderable -> ((FlatColorButton) renderable).renderTooltip(extractor, this, mouseX, mouseY));
@@ -532,7 +560,7 @@ public class ResourceStationScreen extends Screen {
         long failed = snapshot.failed();
         long done = snapshot.done();
         String text = Component.translatable("gui.yes_steve_model.resource_station.queue_status", queued, done, failed).getString();
-        int queueY = this.guiTop + this.guiHeight - 39;
+        int queueY = footerButtonY() - 29;
         ResourceDownloadManager.TaskSnapshot currentTask = snapshot.currentTask();
         if (currentTask != null) {
             int x = this.guiLeft + 12;
@@ -576,11 +604,11 @@ public class ResourceStationScreen extends Screen {
     }
 
     private int footerButtonY() {
-        return this.guiTop + this.guiHeight - 25;
+        return this.guiTop + this.guiHeight - 21;
     }
 
     private int entryButtonX() {
-        return this.guiLeft + this.guiWidth - ENTRY_BUTTON_AREA_WIDTH - 10;
+        return this.guiLeft + this.guiWidth - entryButtonAreaWidth() - 10;
     }
 
     private int entryPanelRight() {
@@ -589,6 +617,28 @@ public class ResourceStationScreen extends Screen {
 
     private int maxPage(int entryCount) {
         return Math.max(0, (entryCount - 1) / Math.max(1, this.entriesPerPage));
+    }
+
+    private int labelWidth() {
+        int urlWidth = this.font.width(Component.translatable("gui.yes_steve_model.resource_station.url"));
+        int searchWidth = this.font.width(Component.translatable("gui.yes_steve_model.resource_station.search"));
+        return Math.min(70, Math.max(42, Math.max(urlWidth, searchWidth) + 6));
+    }
+
+    private int buttonWidth(Component label, int minWidth, int maxWidth) {
+        return Math.min(maxWidth, Math.max(minWidth, this.font.width(label) + 12));
+    }
+
+    private int downloadButtonWidth() {
+        return buttonWidth(Component.translatable("gui.yes_steve_model.resource_station.download"), this.guiWidth >= 420 ? 44 : 42, 74);
+    }
+
+    private int retryButtonWidth() {
+        return buttonWidth(Component.translatable("gui.yes_steve_model.resource_station.retry"), this.guiWidth >= 420 ? 44 : 32, 62);
+    }
+
+    private int entryButtonAreaWidth() {
+        return Math.max(ENTRY_BUTTON_AREA_WIDTH, downloadButtonWidth() + retryButtonWidth() + 4);
     }
 
     @Override

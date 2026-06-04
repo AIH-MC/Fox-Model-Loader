@@ -92,16 +92,22 @@ public final class ResourceDownloadManager {
 
     public static Snapshot snapshot() {
         synchronized (LOCK) {
-            List<TaskSnapshot> tasks = HISTORY.stream().map(ResourceDownloadManager::snapshot).toList();
+            List<TaskSnapshot> unfinishedTasks = new ArrayList<>();
+            if (currentTask != null) {
+                unfinishedTasks.add(snapshot(currentTask));
+            }
+            unfinishedTasks.addAll(QUEUE.stream().map(ResourceDownloadManager::snapshot).toList());
+            List<TaskSnapshot> finishedTasks = HISTORY.stream().map(ResourceDownloadManager::snapshot).toList();
             long done = HISTORY.stream().filter(task -> task.state == TaskState.DONE).count();
             long failed = HISTORY.stream().filter(task -> task.state == TaskState.FAILED).count();
-            return new Snapshot(currentTask == null ? null : snapshot(currentTask), tasks, QUEUE.size(), done, failed, status, statusColor);
+            return new Snapshot(currentTask == null ? null : snapshot(currentTask), unfinishedTasks, finishedTasks,
+                    QUEUE.size(), done, failed, status, statusColor);
         }
     }
 
     public static void clearFinished() {
         synchronized (LOCK) {
-            HISTORY.removeIf(task -> task != currentTask && (task.state == TaskState.DONE || task.state == TaskState.FAILED));
+            HISTORY.clear();
             status = Component.translatable("gui.yes_steve_model.resource_station.finished_cleared");
             statusColor = ChatFormatting.GRAY;
         }
@@ -114,8 +120,6 @@ public final class ResourceDownloadManager {
         }
         DownloadTask task = new DownloadTask(entry, config);
         QUEUE.add(task);
-        HISTORY.add(task);
-        trimHistoryLocked();
         status = Component.translatable("gui.yes_steve_model.resource_station.queued", entry.name());
         statusColor = ChatFormatting.YELLOW;
         return true;
@@ -130,11 +134,6 @@ public final class ResourceDownloadManager {
 
     private static void trimHistoryLocked() {
         while (HISTORY.size() > HISTORY_LIMIT) {
-            DownloadTask first = HISTORY.get(0);
-            if (first == currentTask || first.state == TaskState.QUEUED || first.state == TaskState.DOWNLOADING
-                    || first.state == TaskState.IMPORTING || first.state == TaskState.UPLOADING) {
-                return;
-            }
             HISTORY.remove(0);
         }
     }
@@ -343,6 +342,8 @@ public final class ResourceDownloadManager {
             task.progress = state == TaskState.DONE ? 1f : task.progress;
             status = message;
             statusColor = state == TaskState.DONE ? ChatFormatting.GREEN : ChatFormatting.RED;
+            HISTORY.add(task);
+            trimHistoryLocked();
             currentTask = null;
             downloadLoading = false;
         }
@@ -410,7 +411,8 @@ public final class ResourceDownloadManager {
     public record TaskSnapshot(String name, String fileName, TaskState state, float progress, Component message) {
     }
 
-    public record Snapshot(TaskSnapshot currentTask, List<TaskSnapshot> tasks, int queued, long done, long failed,
+    public record Snapshot(TaskSnapshot currentTask, List<TaskSnapshot> unfinishedTasks, List<TaskSnapshot> finishedTasks,
+                           int queued, long done, long failed,
                            Component status, ChatFormatting statusColor) {
     }
 }

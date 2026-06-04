@@ -38,6 +38,10 @@ public class GeneralConfig {
 
     public static ModConfigSpec.BooleanValue ANIMATION_DEBUG_LOG;
 
+    public static ModConfigSpec.BooleanValue EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR;
+
+    public static ModConfigSpec.BooleanValue EXPERIMENTAL_ENABLE_ELYTRA_FOR_DEFAULT_AND_MISC_MODELS;
+
     public static ModConfigSpec.BooleanValue WARN_REPEATED_ANIMATION_EVALUATION;
 
     public static ModConfigSpec.BooleanValue RELEASE_TEXTURE_BYTES_AFTER_UPLOAD;
@@ -146,6 +150,10 @@ public class GeneralConfig {
         ANIMATION_FRAME_PROFILER = builder.define("AnimationFrameProfiler", false);
         builder.comment("Print one [YSM-ANIM] line for each animation evaluation when AnimationFrameProfiler is enabled.");
         ANIMATION_DEBUG_LOG = builder.define("AnimationDebugLog", false);
+        builder.comment("Allow fallback elytra rendering for models without ElytraLocator. Experimental and may not align perfectly.");
+        EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR = builder.define("ExperimentalFallbackElytraWithoutLocator", false);
+        builder.comment("Re-enable elytra rendering for default and misc built-in models, plus models whose ElytraLocator is nested under an Elytra display bone.");
+        EXPERIMENTAL_ENABLE_ELYTRA_FOR_DEFAULT_AND_MISC_MODELS = builder.define("ExperimentalEnableElytraForDefaultAndMiscModels", true);
         builder.comment("Warn when the same entity evaluates animation more than once in the same render frame.");
         WARN_REPEATED_ANIMATION_EVALUATION = builder.define("WarnRepeatedAnimationEvaluation", true);
         builder.comment("Release original texture byte arrays after successful GPU upload. Disable if resource reloads need to re-decode outer textures.");

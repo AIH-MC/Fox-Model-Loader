@@ -9,6 +9,8 @@ configurations {
     }
 }
 
+def releaseArchiveName = "${rootProject.archives_name}-${project.version}-fa26.1.x"
+
 sourceSets {
     main {
         java {
@@ -59,9 +61,15 @@ processResources {
 shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = 'dev-shadow'
+    archiveFileName = "${releaseArchiveName}-dev-shadow.jar"
     exclude 'net/minecraft/**'
 }
 
 remapJar {
     input.set shadowJar.archiveFile
+    archiveFileName = "${releaseArchiveName}.jar"
+}
+
+tasks.named('remapSourcesJar') {
+    archiveFileName = "${releaseArchiveName}-sources.jar"
 }
