@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.gui;
 import com.elfmcys.yesstevemodel.config.ExtraPlayerRenderConfig;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.config.LoadingStateConfig;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.jetbrains.annotations.Nullable;
@@ -18,7 +19,7 @@ import java.util.List;
 
 public class ExtraPlayerConfigScreen extends OptionScreen {
 
-    public ExtraPlayerConfigScreen(@Nullable PlayerModelScreen modelScreen) {
+    public ExtraPlayerConfigScreen(@Nullable Screen modelScreen) {
         super(Component.literal("设置"), modelScreen);
     }
 

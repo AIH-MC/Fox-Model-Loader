@@ -20,6 +20,7 @@ public class DownloadScreen extends Screen {
     private static final int MIN_PANEL_HEIGHT = 220;
     private static final int MAX_PANEL_HEIGHT = 420;
     private static final int HEADER_HEIGHT = 48;
+    private static final int COMPACT_HEADER_HEIGHT = 72;
     private static final int FOOTER_HEIGHT = 38;
     private static final int SECTION_LABEL_HEIGHT = 13;
     private static final int SECTION_GAP = 6;
@@ -58,10 +59,15 @@ public class DownloadScreen extends Screen {
         int stationW = buttonWidth(stationLabel, 58, 126);
         int returnW = buttonWidth(returnLabel, 58, 86);
         int clearW = Math.min(buttonWidth(clearLabel, 74, 126), Math.max(74, right - left - stationW - returnW - 12));
+        if (compactHeader()) {
+            clearW = Math.max(74, right - left);
+        }
         addRenderableWidget(new FlatColorButton(left, topY, stationW, 18, stationLabel, b -> {
             Minecraft.getInstance().setScreen(this.resourceStationScreen == null ? new ResourceStationScreen(this.parentScreen) : this.resourceStationScreen);
         }));
-        addRenderableWidget(new FlatColorButton(right - returnW - 6 - clearW, topY, clearW, 18, clearLabel, b -> {
+        int clearX = compactHeader() ? left : right - returnW - 6 - clearW;
+        int clearY = compactHeader() ? topY + 22 : topY;
+        addRenderableWidget(new FlatColorButton(clearX, clearY, clearW, 18, clearLabel, b -> {
             ResourceDownloadManager.clearFinished();
             this.page = 0;
             init();
@@ -94,7 +100,7 @@ public class DownloadScreen extends Screen {
         extractTransparentBackground(extractor);
         ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
         extractor.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + this.guiWidth, this.guiTop + this.guiHeight, -14540254, -14540254);
-        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.title"), this.guiWidth - 24, this.guiLeft + 12, this.guiTop + 31, 0xFFF3F3E0);
+        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.title"), this.guiWidth - 24, this.guiLeft + 12, this.guiTop + (compactHeader() ? 53 : 31), 0xFFF3F3E0);
         renderUnfinishedTasks(extractor, snapshot);
         renderFinishedTasks(extractor, snapshot);
         renderFooter(extractor, snapshot);
@@ -104,7 +110,7 @@ public class DownloadScreen extends Screen {
     private void renderUnfinishedTasks(GuiGraphicsExtractor extractor, ResourceDownloadManager.Snapshot snapshot) {
         List<ResourceDownloadManager.TaskSnapshot> tasks = snapshot.unfinishedTasks();
         int x = this.guiLeft + 10;
-        int y = this.guiTop + HEADER_HEIGHT;
+        int y = this.guiTop + headerHeight();
         int w = this.guiWidth - 20;
         drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.tasks").withStyle(ChatFormatting.YELLOW), w, x, y, 0xFFF3F3E0);
         int rowY = y + SECTION_LABEL_HEIGHT;
@@ -142,7 +148,7 @@ public class DownloadScreen extends Screen {
         List<ResourceDownloadManager.TaskSnapshot> tasks = snapshot.finishedTasks();
         int x = this.guiLeft + 10;
         int w = this.guiWidth - 20;
-        int startY = this.guiTop + HEADER_HEIGHT + SECTION_LABEL_HEIGHT + this.unfinishedRows * ROW_HEIGHT + SECTION_GAP;
+        int startY = this.guiTop + headerHeight() + SECTION_LABEL_HEIGHT + this.unfinishedRows * ROW_HEIGHT + SECTION_GAP;
         drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.finished").withStyle(ChatFormatting.YELLOW), w, x, startY, 0xFFF3F3E0);
         int rowY = startY + SECTION_LABEL_HEIGHT;
         if (tasks.isEmpty()) {
@@ -198,16 +204,24 @@ public class DownloadScreen extends Screen {
     }
 
     private void updateLayout() {
-        this.guiWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, this.width - OUTER_MARGIN * 2));
-        this.guiHeight = Math.min(MAX_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, this.height - OUTER_MARGIN * 2));
+        this.guiWidth = Math.min(MAX_PANEL_WIDTH, Math.max(1, this.width - OUTER_MARGIN * 2));
+        this.guiHeight = Math.min(MAX_PANEL_HEIGHT, Math.max(1, this.height - OUTER_MARGIN * 2));
         this.guiLeft = Math.max(0, (this.width - this.guiWidth) / 2);
         this.guiTop = Math.max(0, (this.height - this.guiHeight) / 2);
         ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
-        int rowSlots = Math.max(2, (this.guiHeight - HEADER_HEIGHT - FOOTER_HEIGHT - SECTION_LABEL_HEIGHT * 2 - SECTION_GAP) / ROW_HEIGHT);
+        int rowSlots = Math.max(2, (this.guiHeight - headerHeight() - FOOTER_HEIGHT - SECTION_LABEL_HEIGHT * 2 - SECTION_GAP) / ROW_HEIGHT);
         int wantedUnfinishedRows = snapshot.unfinishedTasks().isEmpty() ? 1 : Math.min(3, snapshot.unfinishedTasks().size());
         this.unfinishedRows = Math.max(1, Math.min(wantedUnfinishedRows, rowSlots - 1));
         this.rows = Math.max(1, rowSlots - this.unfinishedRows);
         this.page = Math.min(this.page, maxPage(snapshot.finishedTasks().size()));
+    }
+
+    private boolean compactHeader() {
+        return this.guiWidth < 380;
+    }
+
+    private int headerHeight() {
+        return compactHeader() ? COMPACT_HEADER_HEIGHT : HEADER_HEIGHT;
     }
 
     private int maxPage(int taskCount) {

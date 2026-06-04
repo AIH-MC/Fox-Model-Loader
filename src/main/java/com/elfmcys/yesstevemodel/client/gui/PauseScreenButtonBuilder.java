@@ -24,11 +24,11 @@ public class PauseScreenButtonBuilder {
             Minecraft minecraft = Minecraft.getInstance();
             Button buttonBuild = Button.builder(Component.translatable("gui.yes_steve_model.skin"), button -> {
                 minecraft.setScreen(new PlayerModelScreen());
-            }).bounds((pauseScreen.width / 2) - 69, pauseScreen.height - 35, 138, 30).build();
+            }).bounds((pauseScreen.width / 2) - 94, pauseScreen.height - 35, 138, 30).build();
             buttonBuild.setTooltip(Tooltip.create(Component.translatable("key.yes_steve_model.player_model.desc")));
             Button buttonBuild2 = Button.builder(Component.literal("🔧"), button2 -> {
                 minecraft.setScreen(new ExtraPlayerRenderScreen());
-            }).bounds((pauseScreen.width / 2) - 120, pauseScreen.height - 35, 50, 30).build();
+            }).bounds((pauseScreen.width / 2) - 145, pauseScreen.height - 35, 50, 30).build();
             buttonBuild2.setTooltip(Tooltip.create(Component.translatable("key.yes_steve_model.open_extra_player_render.desc")));
             Button buttonBuild3 = Button.builder(Component.literal("😄"), button3 -> {
                 if (minecraft.player != null) {
@@ -40,9 +40,13 @@ public class PauseScreenButtonBuilder {
                         }
                     });
                 }
-            }).bounds((pauseScreen.width / 2) + 69, pauseScreen.height - 35, 50, 30).build();
+            }).bounds((pauseScreen.width / 2) + 45, pauseScreen.height - 35, 50, 30).build();
             buttonBuild3.setTooltip(Tooltip.create(Component.translatable("key.yes_steve_model.animation_roulette.desc")));
-            return List.of(buttonBuild, buttonBuild2, buttonBuild3);
+            Button buttonBuild4 = Button.builder(Component.literal("YSM"), button4 -> {
+                minecraft.setScreen(new ExtraPlayerConfigScreen(pauseScreen));
+            }).bounds((pauseScreen.width / 2) + 96, pauseScreen.height - 35, 50, 30).build();
+            buttonBuild4.setTooltip(Tooltip.create(Component.translatable("gui.yes_steve_model.config")));
+            return List.of(buttonBuild, buttonBuild2, buttonBuild3, buttonBuild4);
         }
         return null;
     }

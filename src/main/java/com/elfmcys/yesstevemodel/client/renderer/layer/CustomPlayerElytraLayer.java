@@ -27,6 +27,12 @@ public class CustomPlayerElytraLayer extends GeoLayerRenderer<CustomPlayerEntity
 
     private static final String ELYTRA_LOCATOR_BONE_NAME = "ElytraLocator";
 
+    private static final String WING_BONE_NAME = "Wing";
+
+    private static final String LEFT_WING_BONE_NAME = "LeftWing";
+
+    private static final String RIGHT_WING_BONE_NAME = "RightWing";
+
     private static final Identifier WINGS_LOCATION = Identifier.withDefaultNamespace("textures/entity/equipment/wings/elytra.png");
 
     private final net.minecraft.client.model.object.equipment.ElytraModel elytraModel;
@@ -80,22 +86,26 @@ public class CustomPlayerElytraLayer extends GeoLayerRenderer<CustomPlayerEntity
 
     public static boolean shouldSuppressVanillaWings(CustomPlayerEntity customPlayer) {
         AnimatedGeoModel animatedGeoModel = customPlayer == null ? null : customPlayer.getCurrentModel();
+        if (!hasEquippedElytra(customPlayer)) {
+            return false;
+        }
+        if (hasModelOwnedElytraVisual(animatedGeoModel)) {
+            return true;
+        }
         return getElytraRenderMode(customPlayer, animatedGeoModel) != ElytraRenderMode.NONE;
     }
 
     private static ElytraRenderMode getElytraRenderMode(CustomPlayerEntity customPlayer, AnimatedGeoModel animatedGeoModel) {
-        if (customPlayer == null || !customPlayer.isModelReady()) {
-            return ElytraRenderMode.NONE;
-        }
-        LivingEntity entity = customPlayer.getEntity();
-        ItemStack stack = CosmeticArmorHelper.getElytraItem(entity);
-        if (stack.isEmpty()) {
-            return ElytraRenderMode.NONE;
-        }
-        if (shouldSkipCustomElytra(customPlayer.getModelId(), animatedGeoModel)) {
+        if (!hasEquippedElytra(customPlayer)) {
             return ElytraRenderMode.NONE;
         }
         if (animatedGeoModel == null) {
+            return ElytraRenderMode.NONE;
+        }
+        if (hasModelOwnedElytraVisual(animatedGeoModel)) {
+            return ElytraRenderMode.NONE;
+        }
+        if (isCompatibilityElytraBlocked(customPlayer.getModelId(), animatedGeoModel)) {
             return ElytraRenderMode.NONE;
         }
         if (!animatedGeoModel.elytraBones().isEmpty()) {
@@ -105,6 +115,15 @@ public class CustomPlayerElytraLayer extends GeoLayerRenderer<CustomPlayerEntity
             return ElytraRenderMode.FALLBACK;
         }
         return ElytraRenderMode.NONE;
+    }
+
+    private static boolean hasEquippedElytra(CustomPlayerEntity customPlayer) {
+        if (customPlayer == null || !customPlayer.isModelReady()) {
+            return false;
+        }
+        LivingEntity entity = customPlayer.getEntity();
+        ItemStack stack = CosmeticArmorHelper.getElytraItem(entity);
+        return !stack.isEmpty();
     }
 
     private static Identifier resolveElytraTexture(LivingEntity entity) {
@@ -119,7 +138,7 @@ public class CustomPlayerElytraLayer extends GeoLayerRenderer<CustomPlayerEntity
         return cloakTextureLocation;
     }
 
-    private static boolean shouldSkipCustomElytra(String modelId, AnimatedGeoModel animatedGeoModel) {
+    private static boolean isCompatibilityElytraBlocked(String modelId, AnimatedGeoModel animatedGeoModel) {
         if (GeneralConfig.safeGet(GeneralConfig.EXPERIMENTAL_ENABLE_ELYTRA_FOR_DEFAULT_AND_MISC_MODELS)) {
             return false;
         }
@@ -148,6 +167,25 @@ public class CustomPlayerElytraLayer extends GeoLayerRenderer<CustomPlayerEntity
         }
         for (int i = 0; i < elytraBones.size() - 1; i++) {
             if (ELYTRA_BONE_NAME.equals(elytraBones.get(i).getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasModelOwnedElytraVisual(AnimatedGeoModel animatedGeoModel) {
+        return hasNamedWingBones(animatedGeoModel);
+    }
+
+    private static boolean hasNamedWingBones(AnimatedGeoModel animatedGeoModel) {
+        if (animatedGeoModel == null) {
+            return false;
+        }
+        for (IBone bone : animatedGeoModel.bones().values()) {
+            String name = bone == null ? null : bone.getName();
+            if (WING_BONE_NAME.equalsIgnoreCase(name)
+                    || LEFT_WING_BONE_NAME.equalsIgnoreCase(name)
+                    || RIGHT_WING_BONE_NAME.equalsIgnoreCase(name)) {
                 return true;
             }
         }

@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.neoforge;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.gui.ExtraPlayerConfigScreen;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import dev.architectury.event.events.common.LifecycleEvent;
 import net.neoforged.api.distmarker.Dist;
@@ -8,6 +9,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import rip.ysm.api.config.ConfigRegistration;
 
 @Mod(YesSteveModel.MOD_ID)
@@ -17,6 +19,7 @@ public final class YesSteveModelNeoForge {
         NeoForgeCapabilityTypes.register(modBus);
         NeoForgeEventBridge.register(modBus);
         if (FMLEnvironment.getDist() == Dist.CLIENT) {
+            container.registerExtensionPoint(IConfigScreenFactory.class, (modContainer, parent) -> new ExtraPlayerConfigScreen(parent));
             NeoForgeClientEventBridge.register(modBus);
         }
         YesSteveModel.init();

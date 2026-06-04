@@ -23,6 +23,7 @@
     "client.ScreenAccessor",
     "client.ThrowableItemProjectileAccessor",
     "client.EntityRidingAccessor",
+    "client.WingsLayerMixin",
     "client.WorldRendererMixin"
   ],
   "mixins": [
