@@ -30,6 +30,7 @@ public final class ModelRepoClient {
     private static final String USER_AGENT = "OpenYSM-ResourceStation";
     private static final String GITHUB_ACCEPT = "application/vnd.github+json";
     private static final String GITHUB_API_VERSION = "2022-11-28";
+    private static final String CACHE_BUSTER_PARAM = "ysm_refresh";
     private static final AtomicLong REQUEST_IDS = new AtomicLong();
     private static final int PROBE_BYTES = 64 * 1024;
     private static final int PROBE_TIMEOUT_MS = 2500;
@@ -61,7 +62,7 @@ public final class ModelRepoClient {
                 if (!indexUrl.endsWith("index.json")) {
                     indexUrl = indexUrl + "/index.json";
                 }
-                result = parseIndex(indexUrl, new String(readFirst(indexCandidates(indexUrl, config), config.timeoutMs(), 2 * 1024 * 1024), StandardCharsets.UTF_8));
+                result = parseIndex(indexUrl, new String(readFirst(indexCandidates(indexUrl, config), config.timeoutMs(), 2 * 1024 * 1024, true), StandardCharsets.UTF_8));
             }
             if (debugLogEnabled()) {
                 YesSteveModel.LOGGER.info("[YSM][ResourceStation] Listing source finished sourceUrl={} entries={} elapsedMs={}",
@@ -127,7 +128,7 @@ public final class ModelRepoClient {
         if (debugLogEnabled()) {
             YesSteveModel.LOGGER.info("[YSM][ResourceStation] Preview download started entry={} previewUrl={}", entry.name(), entry.previewUrl());
         }
-        return readFirst(urlCandidates(entry.previewUrl(), config), config.timeoutMs(), 2 * 1024 * 1024);
+        return readFirst(urlCandidates(entry.previewUrl(), config), config.timeoutMs(), 2 * 1024 * 1024, true);
     }
 
     public static String safeModelId(ModelRepoEntry entry) {
@@ -312,7 +313,7 @@ public final class ModelRepoClient {
         }
         for (String candidate : candidates) {
             try {
-                String json = new String(read(candidate, config.timeoutMs(), maxBytes), StandardCharsets.UTF_8);
+                String json = new String(read(candidate, config.timeoutMs(), maxBytes, true), StandardCharsets.UTF_8);
                 return JsonParser.parseString(json);
             } catch (IOException | RuntimeException e) {
                 last = e;
@@ -333,7 +334,7 @@ public final class ModelRepoClient {
         }
         for (String candidate : candidates) {
             try {
-                return read(candidate, config.timeoutMs(), maxBytes);
+                return read(candidate, config.timeoutMs(), maxBytes, true);
             } catch (IOException e) {
                 last = e;
                 YesSteveModel.LOGGER.warn("[YSM] GitHub candidate failed: {}", candidate, e);
@@ -347,14 +348,22 @@ public final class ModelRepoClient {
     }
 
     private static byte[] readFirst(List<String> candidates, int timeoutMs, int maxBytes) throws IOException {
-        return readFirst(candidates, timeoutMs, maxBytes, null);
+        return readFirst(candidates, timeoutMs, maxBytes, false);
+    }
+
+    private static byte[] readFirst(List<String> candidates, int timeoutMs, int maxBytes, boolean bypassCache) throws IOException {
+        return readFirst(candidates, timeoutMs, maxBytes, null, bypassCache);
     }
 
     private static byte[] readFirst(List<String> candidates, int timeoutMs, int maxBytes, ProgressListener listener) throws IOException {
+        return readFirst(candidates, timeoutMs, maxBytes, listener, false);
+    }
+
+    private static byte[] readFirst(List<String> candidates, int timeoutMs, int maxBytes, ProgressListener listener, boolean bypassCache) throws IOException {
         IOException last = null;
         for (String candidate : candidates) {
             try {
-                return read(candidate, timeoutMs, maxBytes, listener);
+                return read(candidate, timeoutMs, maxBytes, listener, bypassCache);
             } catch (IOException | RuntimeException e) {
                 last = asIOException(e);
                 YesSteveModel.LOGGER.warn("[YSM] Resource candidate failed: {}", candidate, e);
@@ -367,19 +376,38 @@ public final class ModelRepoClient {
         return read(url, timeoutMs, maxBytes, listener, -1L);
     }
 
+    private static byte[] read(String url, int timeoutMs, int maxBytes, boolean bypassCache) throws IOException {
+        return read(url, timeoutMs, maxBytes, null, -1L, bypassCache);
+    }
+
+    private static byte[] read(String url, int timeoutMs, int maxBytes, ProgressListener listener, boolean bypassCache) throws IOException {
+        return read(url, timeoutMs, maxBytes, listener, -1L, bypassCache);
+    }
+
     private static byte[] read(String url, int timeoutMs, int maxBytes, ProgressListener listener, long expectedBytes) throws IOException {
+        return read(url, timeoutMs, maxBytes, listener, expectedBytes, false);
+    }
+
+    private static byte[] read(String url, int timeoutMs, int maxBytes, ProgressListener listener, long expectedBytes, boolean bypassCache) throws IOException {
         long requestId = REQUEST_IDS.incrementAndGet();
         long started = System.nanoTime();
+        String requestUrl = bypassCache ? withCacheBuster(url) : url;
         HttpURLConnection connection = null;
         if (debugLogEnabled()) {
             YesSteveModel.LOGGER.info("[YSM][ResourceStation] HTTP request started id={} url={} timeoutMs={} maxBytes={}",
                     requestId, url, timeoutMs, maxBytes);
         }
         try {
-            connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+            connection = (HttpURLConnection) URI.create(requestUrl).toURL().openConnection();
             connection.setConnectTimeout(timeoutMs);
             connection.setReadTimeout(timeoutMs);
+            connection.setUseCaches(false);
             connection.setRequestProperty("User-Agent", USER_AGENT);
+            if (bypassCache) {
+                connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");
+                connection.setRequestProperty("Pragma", "no-cache");
+                connection.setRequestProperty("Expires", "0");
+            }
             if (url.contains("api.github.com")) {
                 connection.setRequestProperty("Accept", GITHUB_ACCEPT);
                 connection.setRequestProperty("X-GitHub-Api-Version", GITHUB_API_VERSION);
@@ -672,6 +700,18 @@ public final class ModelRepoClient {
         }
         String trimmed = prefix.trim();
         return trimmed.endsWith("/") ? trimmed : trimmed + "/";
+    }
+
+    private static String withCacheBuster(String url) {
+        String base = url;
+        String fragment = "";
+        int fragmentIndex = base.indexOf('#');
+        if (fragmentIndex >= 0) {
+            fragment = base.substring(fragmentIndex);
+            base = base.substring(0, fragmentIndex);
+        }
+        char separator = base.contains("?") ? '&' : '?';
+        return base + separator + CACHE_BUSTER_PARAM + '=' + System.currentTimeMillis() + fragment;
     }
 
     private static boolean isImportFile(String name) {

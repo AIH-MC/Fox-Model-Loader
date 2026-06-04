@@ -54,9 +54,12 @@ public class FlatColorButton extends Button {
             guiGraphics.fillGradient(getX(), (getY() + this.height) - 1, getX() + this.width, getY() + this.height, -790560, -790560);
         }
         Component message = getMessage();
-        int textX = getX() + (this.width - font.width(message)) / 2;
+        int textWidth = font.width(message);
+        int textX = textWidth <= this.width - 4 ? getX() + (this.width - textWidth) / 2 : getX() + 2;
         int textY = getY() + (this.height - 8) / 2;
+        guiGraphics.enableScissor(getX() + 1, getY() + 1, getX() + this.width - 1, getY() + this.height - 1);
         guiGraphics.text(font, message, textX, textY, 0xFFF3F3E0, true);
+        guiGraphics.disableScissor();
 /*         GuiGraphicsExtractor.renderScrollingString(font, getMessage(), getX() + 2, getY(), getX() + getWidth() - 2, getY() + getHeight(), 15986656); */
     }
 

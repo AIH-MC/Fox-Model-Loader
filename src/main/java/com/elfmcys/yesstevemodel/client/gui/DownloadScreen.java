@@ -19,8 +19,10 @@ public class DownloadScreen extends Screen {
     private static final int MAX_PANEL_WIDTH = 620;
     private static final int MIN_PANEL_HEIGHT = 220;
     private static final int MAX_PANEL_HEIGHT = 420;
-    private static final int HEADER_HEIGHT = 36;
-    private static final int FOOTER_HEIGHT = 34;
+    private static final int HEADER_HEIGHT = 48;
+    private static final int FOOTER_HEIGHT = 38;
+    private static final int SECTION_LABEL_HEIGHT = 13;
+    private static final int SECTION_GAP = 6;
     private static final int ROW_HEIGHT = 30;
 
     private final PlayerModelScreen parentScreen;
@@ -30,6 +32,7 @@ public class DownloadScreen extends Screen {
     private int guiWidth;
     private int guiHeight;
     private int rows;
+    private int unfinishedRows;
     private int page;
 
     public DownloadScreen(PlayerModelScreen modelScreen) {
@@ -47,16 +50,23 @@ public class DownloadScreen extends Screen {
         clearWidgets();
         updateLayout();
         int topY = this.guiTop + 8;
+        int left = this.guiLeft + 10;
         int right = this.guiLeft + this.guiWidth - 10;
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 10, topY, 58, 18, Component.translatable("gui.yes_steve_model.resource_station.title"), b -> {
+        Component stationLabel = Component.translatable("gui.yes_steve_model.resource_station.title");
+        Component clearLabel = Component.translatable("gui.yes_steve_model.resource_station.clear_finished");
+        Component returnLabel = Component.translatable("gui.yes_steve_model.model.return");
+        int stationW = buttonWidth(stationLabel, 58, 126);
+        int returnW = buttonWidth(returnLabel, 58, 86);
+        int clearW = Math.min(buttonWidth(clearLabel, 74, 126), Math.max(74, right - left - stationW - returnW - 12));
+        addRenderableWidget(new FlatColorButton(left, topY, stationW, 18, stationLabel, b -> {
             Minecraft.getInstance().setScreen(this.resourceStationScreen == null ? new ResourceStationScreen(this.parentScreen) : this.resourceStationScreen);
         }));
-        addRenderableWidget(new FlatColorButton(right - 138, topY, 74, 18, Component.translatable("gui.yes_steve_model.resource_station.clear_finished"), b -> {
+        addRenderableWidget(new FlatColorButton(right - returnW - 6 - clearW, topY, clearW, 18, clearLabel, b -> {
             ResourceDownloadManager.clearFinished();
             this.page = 0;
             init();
         }));
-        addRenderableWidget(new FlatColorButton(right - 58, topY, 58, 18, Component.translatable("gui.yes_steve_model.model.return"), b -> Minecraft.getInstance().setScreen(this.parentScreen)));
+        addRenderableWidget(new FlatColorButton(right - returnW, topY, returnW, 18, returnLabel, b -> Minecraft.getInstance().setScreen(this.parentScreen)));
         int footerY = this.guiTop + this.guiHeight - 25;
         addRenderableWidget(new FlatColorButton(this.guiLeft + Math.max(10, this.guiWidth / 2 - 60), footerY, 52, 16, Component.translatable("gui.yes_steve_model.pre_page"), b -> {
             if (this.page > 0) {
@@ -65,7 +75,7 @@ public class DownloadScreen extends Screen {
             }
         }));
         addRenderableWidget(new FlatColorButton(this.guiLeft + Math.min(this.guiWidth - 70, this.guiWidth / 2 + 16), footerY, 52, 16, Component.translatable("gui.yes_steve_model.next_page"), b -> {
-            int maxPage = maxPage(ResourceDownloadManager.snapshot().tasks().size());
+            int maxPage = maxPage(ResourceDownloadManager.snapshot().finishedTasks().size());
             if (this.page < maxPage) {
                 this.page++;
                 init();
@@ -84,39 +94,62 @@ public class DownloadScreen extends Screen {
         extractTransparentBackground(extractor);
         ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
         extractor.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + this.guiWidth, this.guiTop + this.guiHeight, -14540254, -14540254);
-        extractor.text(this.font, Component.translatable("gui.yes_steve_model.resource_station.download_page.title"), this.guiLeft + 78, this.guiTop + 12, 0xFFF3F3E0);
-        renderCurrentTask(extractor, snapshot);
-        renderHistory(extractor, snapshot);
+        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.title"), this.guiWidth - 24, this.guiLeft + 12, this.guiTop + 31, 0xFFF3F3E0);
+        renderUnfinishedTasks(extractor, snapshot);
+        renderFinishedTasks(extractor, snapshot);
         renderFooter(extractor, snapshot);
         super.extractRenderState(extractor, mouseX, mouseY, partialTick);
     }
 
-    private void renderCurrentTask(GuiGraphicsExtractor extractor, ResourceDownloadManager.Snapshot snapshot) {
+    private void renderUnfinishedTasks(GuiGraphicsExtractor extractor, ResourceDownloadManager.Snapshot snapshot) {
+        List<ResourceDownloadManager.TaskSnapshot> tasks = snapshot.unfinishedTasks();
         int x = this.guiLeft + 10;
         int y = this.guiTop + HEADER_HEIGHT;
         int w = this.guiWidth - 20;
-        extractor.fillGradient(x, y, x + w, y + 46, -12369342, -12369342);
-        ResourceDownloadManager.TaskSnapshot task = snapshot.currentTask();
-        if (task == null) {
-            drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.idle").withStyle(ChatFormatting.GRAY), w - 12, x + 6, y + 8, 0xFFAAAAAA);
+        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.tasks").withStyle(ChatFormatting.YELLOW), w, x, y, 0xFFF3F3E0);
+        int rowY = y + SECTION_LABEL_HEIGHT;
+        if (tasks.isEmpty()) {
+            extractor.fillGradient(x, rowY, x + w, rowY + ROW_HEIGHT - 3, -12369342, -12369342);
+            drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.idle").withStyle(ChatFormatting.GRAY), w - 12, x + 6, rowY + 8, 0xFFAAAAAA);
             return;
         }
-        drawFirstLine(extractor, Component.literal(task.name()), w - 12, x + 6, y + 5, 0xFFF3F3E0);
+        int count = Math.min(this.unfinishedRows, tasks.size());
+        for (int i = 0; i < count; i++) {
+            renderTaskRow(extractor, tasks.get(i), x, rowY + i * ROW_HEIGHT, w);
+        }
+    }
+
+    private void renderTaskRow(GuiGraphicsExtractor extractor, ResourceDownloadManager.TaskSnapshot task, int x, int y, int w) {
+        extractor.fillGradient(x, y, x + w, y + ROW_HEIGHT - 3, -12369342, -12369342);
+        drawFirstLine(extractor, Component.literal(task.name()), w - 12, x + 6, y + 3, 0xFFF3F3E0);
         String meta = task.state() + "  " + Math.round(task.progress() * 100f) + "%";
         if (!Objects.equals(task.message(), Component.empty())) {
             meta += "  " + task.message().getString();
         }
-        drawFirstLine(extractor, Component.literal(meta).withStyle(ChatFormatting.GRAY), w - 12, x + 6, y + 17, 0xFFAAAAAA);
-        int barX = x + 6;
-        int barY = y + 34;
-        int barW = w - 12;
-        extractor.fillGradient(barX, barY, barX + barW, barY + 6, -16777216, -16777216);
-        extractor.fillGradient(barX, barY, barX + (int) (barW * task.progress()), barY + 6, -14774017, -14774017);
+        drawFirstLine(extractor, Component.literal(meta).withStyle(statusStyle(task.state())), w - 12, x + 6, y + 15, 0xFFAAAAAA);
+        if (task.state() == ResourceDownloadManager.TaskState.DOWNLOADING || task.state() == ResourceDownloadManager.TaskState.IMPORTING
+                || task.state() == ResourceDownloadManager.TaskState.UPLOADING) {
+            renderProgressBar(extractor, task.progress(), x + 6, y + 25, w - 12);
+        }
     }
 
-    private void renderHistory(GuiGraphicsExtractor extractor, ResourceDownloadManager.Snapshot snapshot) {
-        List<ResourceDownloadManager.TaskSnapshot> tasks = snapshot.tasks();
-        int startY = this.guiTop + HEADER_HEIGHT + 54;
+    private void renderProgressBar(GuiGraphicsExtractor extractor, float progress, int x, int y, int w) {
+        extractor.fillGradient(x, y, x + w, y + 3, -16777216, -16777216);
+        extractor.fillGradient(x, y, x + (int) (w * progress), y + 3, -14774017, -14774017);
+    }
+
+    private void renderFinishedTasks(GuiGraphicsExtractor extractor, ResourceDownloadManager.Snapshot snapshot) {
+        List<ResourceDownloadManager.TaskSnapshot> tasks = snapshot.finishedTasks();
+        int x = this.guiLeft + 10;
+        int w = this.guiWidth - 20;
+        int startY = this.guiTop + HEADER_HEIGHT + SECTION_LABEL_HEIGHT + this.unfinishedRows * ROW_HEIGHT + SECTION_GAP;
+        drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.finished").withStyle(ChatFormatting.YELLOW), w, x, startY, 0xFFF3F3E0);
+        int rowY = startY + SECTION_LABEL_HEIGHT;
+        if (tasks.isEmpty()) {
+            extractor.fillGradient(x, rowY, x + w, rowY + ROW_HEIGHT - 3, -13421773, -13421773);
+            drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.no_finished").withStyle(ChatFormatting.GRAY), w - 12, x + 6, rowY + 8, 0xFFAAAAAA);
+            return;
+        }
         int start = this.page * this.rows;
         for (int i = 0; i < this.rows; i++) {
             int index = start + i;
@@ -124,9 +157,7 @@ public class DownloadScreen extends Screen {
                 break;
             }
             ResourceDownloadManager.TaskSnapshot task = tasks.get(index);
-            int y = startY + i * ROW_HEIGHT;
-            int x = this.guiLeft + 10;
-            int w = this.guiWidth - 20;
+            int y = rowY + i * ROW_HEIGHT;
             extractor.fillGradient(x, y, x + w, y + ROW_HEIGHT - 3, -13421773, -13421773);
             drawFirstLine(extractor, Component.literal(task.name()), w - 12, x + 6, y + 3, 0xFFF3F3E0);
             String text = task.state() + "  " + Math.round(task.progress() * 100f) + "%";
@@ -138,7 +169,7 @@ public class DownloadScreen extends Screen {
     }
 
     private void renderFooter(GuiGraphicsExtractor extractor, ResourceDownloadManager.Snapshot snapshot) {
-        int maxPage = maxPage(snapshot.tasks().size());
+        int maxPage = maxPage(snapshot.finishedTasks().size());
         int footerY = this.guiTop + this.guiHeight - 21;
         extractor.text(this.font, Component.literal((this.page + 1) + "/" + (maxPage + 1)), this.guiLeft + this.guiWidth / 2 - 2, footerY + 4, 0xFFF3F3E0);
         String queue = Component.translatable("gui.yes_steve_model.resource_station.queue_status", snapshot.queued(), snapshot.done(), snapshot.failed()).getString();
@@ -171,12 +202,19 @@ public class DownloadScreen extends Screen {
         this.guiHeight = Math.min(MAX_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, this.height - OUTER_MARGIN * 2));
         this.guiLeft = Math.max(0, (this.width - this.guiWidth) / 2);
         this.guiTop = Math.max(0, (this.height - this.guiHeight) / 2);
-        int historyHeight = Math.max(ROW_HEIGHT, this.guiHeight - HEADER_HEIGHT - FOOTER_HEIGHT - 54);
-        this.rows = Math.max(1, historyHeight / ROW_HEIGHT);
-        this.page = Math.min(this.page, maxPage(ResourceDownloadManager.snapshot().tasks().size()));
+        ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
+        int rowSlots = Math.max(2, (this.guiHeight - HEADER_HEIGHT - FOOTER_HEIGHT - SECTION_LABEL_HEIGHT * 2 - SECTION_GAP) / ROW_HEIGHT);
+        int wantedUnfinishedRows = snapshot.unfinishedTasks().isEmpty() ? 1 : Math.min(3, snapshot.unfinishedTasks().size());
+        this.unfinishedRows = Math.max(1, Math.min(wantedUnfinishedRows, rowSlots - 1));
+        this.rows = Math.max(1, rowSlots - this.unfinishedRows);
+        this.page = Math.min(this.page, maxPage(snapshot.finishedTasks().size()));
     }
 
     private int maxPage(int taskCount) {
         return Math.max(0, (taskCount - 1) / Math.max(1, this.rows));
+    }
+
+    private int buttonWidth(Component label, int minWidth, int maxWidth) {
+        return Math.min(maxWidth, Math.max(minWidth, this.font.width(label) + 12));
     }
 }

@@ -53,6 +53,13 @@ public final class RenderUtils {
         return scaleMatrixForBone;
     }
 
+    private static void prepMatrixForEquipmentBone(PoseStack poseStack, IBone bone) {
+        translateMatrixToBone(poseStack, bone);
+        translateToPivotPoint(poseStack, bone);
+        rotateMatrixAroundBone(poseStack, bone);
+        translateAwayFromPivotPoint(poseStack, bone);
+    }
+
     public static boolean prepMatrixForLocator(PoseStack poseStack, List<? extends IBone> locatorHierarchy) {
         return prepMatrixForLocator(poseStack, locatorHierarchy, false);
     }
@@ -80,6 +87,25 @@ public final class RenderUtils {
             }
         }
         return scaleCheck;
+    }
+
+    public static boolean prepMatrixForEquipmentLocator(PoseStack poseStack, List<? extends IBone> locatorHierarchy) {
+        boolean hidden = false;
+        for (int i = 0; i < locatorHierarchy.size() - 1; i++) {
+            IBone bone = locatorHierarchy.get(i);
+            if (isHiddenScale(bone)) {
+                hidden = true;
+            }
+            RenderUtils.prepMatrixForEquipmentBone(poseStack, bone);
+        }
+        IBone lastBone = locatorHierarchy.get(locatorHierarchy.size() - 1);
+        if (isHiddenScale(lastBone)) {
+            hidden = true;
+        }
+        RenderUtils.translateMatrixToBone(poseStack, lastBone);
+        RenderUtils.translateToPivotPoint(poseStack, lastBone);
+        RenderUtils.rotateMatrixAroundBone(poseStack, lastBone);
+        return hidden;
     }
 
     public static Matrix4f invertAndMultiplyMatrices(Matrix4f baseMatrix, Matrix4f inputMatrix) {

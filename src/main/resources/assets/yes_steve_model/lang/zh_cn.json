@@ -133,6 +133,10 @@
   "gui.yes_steve_model.config.input_state_debug_log.desc": "输出 [YSM-INPUT] 日志，用于检测左键、右键、攻击/使用按键、原版挥手/使用物品状态和本地动画脉冲。",
   "gui.yes_steve_model.config.resource_station_debug_log": "资源站调试日志",
   "gui.yes_steve_model.config.resource_station_debug_log.desc": "输出 [YSM][ResourceStation] 日志，用于检测配置读取、资源站列表、HTTP 响应、下载候选地址和请求失败原因。",
+  "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator": "无 ElytraLocator 模型的后备鞘翅",
+  "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator.desc": "实验性功能。模型没有 ElytraLocator 时，使用接近原版的方式渲染鞘翅。",
+  "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models": "重新启用默认/杂项/嵌套 Elytra 模型鞘翅",
+  "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models.desc": "实验性功能。允许 default、misc 内置模型，以及 ElytraLocator 挂在 Elytra 显示骨下的模型再次渲染鞘翅。",
   "gui.yes_steve_model.config.warn_repeated_animation_evaluation": "重复动画计算警告",
   "gui.yes_steve_model.config.warn_repeated_animation_evaluation.desc": "同一实体在同一渲染帧内重复计算动画时输出警告。",
   "gui.yes_steve_model.config.release_texture_bytes_after_upload": "纹理上传后释放字节缓存",
@@ -627,4 +631,17 @@
   "gui.yes_steve_model.model_select.category_deleted_keep_models": "已删除分类 %s，并保留其中模型（%s 组文件夹）",
   "gui.yes_steve_model.model_select.error.category": "分类名无效",
   "gui.yes_steve_model.model_select.error.file": "文件操作失败：%s"
+,
+  "gui.yes_steve_model.config.group.debug": "\u8c03\u8bd5",
+  "gui.yes_steve_model.config.loading_state_position.value.top_left": "\u5de6\u4e0a",
+  "gui.yes_steve_model.config.loading_state_position.value.top_center": "\u9876\u90e8\u5c45\u4e2d",
+  "gui.yes_steve_model.config.loading_state_position.value.top_right": "\u53f3\u4e0a",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_left": "\u5de6\u4e0b",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_center": "\u5e95\u90e8\u5c45\u4e2d",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_right": "\u53f3\u4e0b",
+  "gui.yes_steve_model.config.resource_station_monitor_log": "\u8d44\u6e90\u7ad9\u76d1\u6d4b\u65e5\u5fd7",
+  "gui.yes_steve_model.config.resource_station_monitor_log.desc": "\u8f93\u51fa\u8be6\u7ec6 [YSM-RESOURCE] \u65e5\u5fd7\uff0c\u5305\u542b\u6e90\u5217\u8868\u3001HTTP \u72b6\u6001\u3001\u9884\u89c8\u548c\u4e0b\u8f7d\u94fe\u8def\u3002\u4ec5\u5efa\u8bae\u6392\u67e5\u8d44\u6e90\u7ad9\u95ee\u9898\u65f6\u5f00\u542f\u3002",
+  "gui.yes_steve_model.resource_station.download_page.tasks": "\u4efb\u52a1",
+  "gui.yes_steve_model.resource_station.download_page.finished": "\u5df2\u5b8c\u6210",
+  "gui.yes_steve_model.resource_station.download_page.no_finished": "\u6ca1\u6709\u5df2\u5b8c\u6210\u7684\u4e0b\u8f7d"
 }

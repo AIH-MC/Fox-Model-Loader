@@ -36,7 +36,7 @@ public class EnumOptionRow<E extends Enum<E>> extends OptionRow<E> {
         g.fill(cx, cy, cx + cw, cy + ch, blendBg(hover, 0x3EC8C8C8));
         g.outline(cx, cy, cw, ch, 0x60FFFFFF);
 
-        Component text = Component.literal(prettify(option.get().name()));
+        Component text = enumLabel(option.get());
         g.text(Minecraft.getInstance().font, text, cx + 6, cy + (ch - 8) / 2, 0xFFFFFFFF, false);
 
         int arrowX = cx + cw - 10;
@@ -93,7 +93,7 @@ public class EnumOptionRow<E extends Enum<E>> extends OptionRow<E> {
             boolean selected = idx == currentIndex();
             int bg = selected ? new Color(255,255,255,60).getRGB() : (hover ? 0xFF333333 : 0);
             if (bg != 0) g.fill(listX + 1, itemY, listX + cw - 1, itemY + 14, bg);
-            g.text(Minecraft.getInstance().font, Component.literal(prettify(values[idx].name())), listX + 6, itemY + (14 - 8) / 2, -1, true);
+            g.text(Minecraft.getInstance().font, enumLabel(values[idx]), listX + 6, itemY + (14 - 8) / 2, -1, true);
         }
         if (values.length > visible) {
             int trackX = listX + cw - 3;
@@ -159,6 +159,12 @@ public class EnumOptionRow<E extends Enum<E>> extends OptionRow<E> {
             if (p.length() > 1) sb.append(p.substring(1).toLowerCase());
         }
         return sb.toString();
+    }
+
+    private Component enumLabel(E value) {
+        String key = "gui.yes_steve_model.config." + option.getTranslationKey() + ".value." + value.name().toLowerCase(java.util.Locale.ROOT);
+        Component translated = Component.translatable(key);
+        return key.equals(translated.getString()) ? Component.literal(prettify(value.name())) : translated;
     }
 
     private int currentIndex() {

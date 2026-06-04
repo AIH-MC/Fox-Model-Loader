@@ -7,11 +7,11 @@ group = mod_group_id
 version = mod_version
 
 base {
-    archivesName = "fox-model-loader-1.2.0-neo26.1.2"
+    archivesName = "fox-model-loader-1.2.1-neo26.1.x"
 }
 
 tasks.named("jar") {
-    archiveFileName = "fox-model-loader-1.2.0-neo26.1.2.jar"
+    archiveFileName = "fox-model-loader-1.2.1-neo26.1.x.jar"
 }
 
 repositories {

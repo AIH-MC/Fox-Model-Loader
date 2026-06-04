@@ -133,6 +133,10 @@
   "gui.yes_steve_model.config.input_state_debug_log.desc": "Print [YSM-INPUT] logs for left/right click, attack/use keys, vanilla swing/use state, and local animation pulses.",
   "gui.yes_steve_model.config.resource_station_debug_log": "Resource station debug log",
   "gui.yes_steve_model.config.resource_station_debug_log.desc": "Print [YSM][ResourceStation] logs for config loading, source listing, HTTP responses, download candidates, and request failures.",
+  "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator": "Fallback elytra for models without ElytraLocator",
+  "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator.desc": "Experimental. Render elytra with vanilla-style placement when the model has no ElytraLocator.",
+  "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models": "Re-enable elytra for default, misc, and nested-Elytra models",
+  "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models.desc": "Experimental. Allow default/misc built-in models and models whose ElytraLocator is under an Elytra display bone to render elytra again.",
   "gui.yes_steve_model.config.warn_repeated_animation_evaluation": "Warn repeated animation evaluation",
   "gui.yes_steve_model.config.warn_repeated_animation_evaluation.desc": "Warn when the same entity evaluates animation more than once in the same render frame.",
   "gui.yes_steve_model.config.release_texture_bytes_after_upload": "Release texture bytes after upload",
@@ -627,4 +631,17 @@
   "gui.yes_steve_model.model_select.category_deleted_keep_models": "Deleted category %s and kept its models (%s folder sets)",
   "gui.yes_steve_model.model_select.error.category": "Invalid category",
   "gui.yes_steve_model.model_select.error.file": "File operation failed: %s"
+,
+  "gui.yes_steve_model.config.group.debug": "Debug",
+  "gui.yes_steve_model.config.loading_state_position.value.top_left": "Top Left",
+  "gui.yes_steve_model.config.loading_state_position.value.top_center": "Top Center",
+  "gui.yes_steve_model.config.loading_state_position.value.top_right": "Top Right",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_left": "Bottom Left",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_center": "Bottom Center",
+  "gui.yes_steve_model.config.loading_state_position.value.bottom_right": "Bottom Right",
+  "gui.yes_steve_model.config.resource_station_monitor_log": "Resource station monitor log",
+  "gui.yes_steve_model.config.resource_station_monitor_log.desc": "Print detailed [YSM-RESOURCE] logs for source listing, HTTP status, previews, and downloads. Enable only while diagnosing resource station issues.",
+  "gui.yes_steve_model.resource_station.download_page.tasks": "Tasks",
+  "gui.yes_steve_model.resource_station.download_page.finished": "Finished",
+  "gui.yes_steve_model.resource_station.download_page.no_finished": "No finished downloads"
 }
