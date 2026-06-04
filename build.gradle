@@ -45,6 +45,10 @@ subprojects {
             name = "Architectury"
             url = "https://maven.architectury.dev"
         }
+        maven {
+            name = "Terraformers"
+            url = "https://maven.terraformersmc.com/"
+        }
     }
 
     dependencies {

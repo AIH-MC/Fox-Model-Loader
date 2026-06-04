@@ -20,6 +20,9 @@
     "client": [
       "com.elfmcys.yesstevemodel.fabric.client.YesSteveModelFabricClient"
     ],
+    "modmenu": [
+      "com.elfmcys.yesstevemodel.fabric.client.YesSteveModelModMenu"
+    ],
     "cardinal-components-entity": [
       "com.elfmcys.yesstevemodel.fabric.YsmComponents"
     ]
