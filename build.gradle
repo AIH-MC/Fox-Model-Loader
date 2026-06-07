@@ -53,11 +53,13 @@ subprojects {
 
     dependencies {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
-        mappings "net.fabricmc:mojang-mappings:26.1.2-custom"
+        mappings loom.layered{
+            mappings file("mappings/mapping.tiny")
+        }
     }
 
     java {
-        withSourcesJar()
+        //withSourcesJar()
         sourceCompatibility = JavaVersion.VERSION_25
         targetCompatibility = JavaVersion.VERSION_25
         toolchain {
