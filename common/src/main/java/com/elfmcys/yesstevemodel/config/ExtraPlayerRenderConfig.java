@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.config;
 
+import dev.architectury.platform.Platform;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 public class ExtraPlayerRenderConfig {
@@ -17,7 +18,7 @@ public class ExtraPlayerRenderConfig {
     public static void define(ForgeConfigSpec.Builder builder) {
         builder.push("extra_player_render");
         builder.comment("Whether to display player");
-        DISABLE_PLAYER_RENDER = builder.define("DisablePlayerRender", false);
+        DISABLE_PLAYER_RENDER = builder.define("DisablePlayerRender", Platform.isModLoaded("figura"));
         builder.comment("Player position x in screen");
         PLAYER_POS_X = builder.defineInRange("PlayerPosX", 10, 0, Integer.MAX_VALUE);
         builder.comment("Player position y in screen");
@@ -25,7 +26,7 @@ public class ExtraPlayerRenderConfig {
         builder.comment("Player scale in screen");
         PLAYER_SCALE = builder.defineInRange("PlayerScale", 40.0d, 8.0d, 360.0d);
         builder.comment("Player yaw offset in screen");
-        PLAYER_YAW_OFFSET = builder.defineInRange("PlayerYawOffset", 5.0d, Double.MIN_VALUE, Double.MAX_VALUE);
+        PLAYER_YAW_OFFSET = builder.defineInRange("PlayerYawOffset", 0.0d, -Double.MAX_VALUE, Double.MAX_VALUE);
         builder.pop();
     }
 }

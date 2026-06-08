@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.gui.button;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.capability.StarModelsCapability;
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.resource.models.Metadata;
 import com.elfmcys.yesstevemodel.client.animation.AnimationTracker;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
@@ -39,7 +40,7 @@ import java.util.Objects;
 
 public class ModelButton extends Button {
 
-    private static final ResourceLocation ICON_TEXTURE = new ResourceLocation(YesSteveModel.MOD_ID, "texture/icon.png");
+    private static final ResourceLocation ICON_TEXTURE = ResourceLocation.fromNamespaceAndPath(YesSteveModel.MOD_ID, "texture/icon.png");
 
     public final boolean isStarred;
 
@@ -133,17 +134,27 @@ public class ModelButton extends Button {
         LocalPlayer localPlayer;
         if (!this.isStarred && (localPlayer = Minecraft.getInstance().player) != null) {
             PlayerCapability.get(localPlayer).ifPresent(cap -> {
+                String selectedModelId = this.modelIdHolder.getModelId();
+                String selectedTextureName = this.modelIdHolder.getCurrentTextureName();
+                ClientModelManager.rememberSelectedModel(selectedModelId, selectedTextureName);
+                if (ClientModelManager.isLocalOnlyModel(selectedModelId)) {
+                    cap.initModelWithTexture(selectedModelId, selectedTextureName);
+                    return;
+                }
                 if (NetworkHandler.isClientConnected()) {
+                    if (ClientModelManager.isLocalOnlyModel(cap.getModelId())) {
+                        cap.initModelWithTexture(selectedModelId, selectedTextureName);
+                    }
                     if (cap.hasMolangVars(this.modelIdHolder.getModelAssembly().getModelData().getHashId())) {
-                        cap.initModelWithTexture(this.modelIdHolder.getModelId(), this.modelIdHolder.getCurrentTextureName());
+                        cap.initModelWithTexture(selectedModelId, selectedTextureName);
                         NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(cap.getModelId(), cap.getCurrentTextureName()));
                         return;
                     } else {
-                        NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(this.modelIdHolder.getModelId(), this.modelIdHolder.getCurrentTextureName()));
+                        NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(selectedModelId, selectedTextureName));
                         return;
                     }
                 }
-                cap.initModelWithTexture(this.modelIdHolder.getModelId(), this.modelIdHolder.getCurrentTextureName());
+                cap.initModelWithTexture(selectedModelId, selectedTextureName);
             });
         }
     }
@@ -169,21 +180,32 @@ public class ModelButton extends Button {
         int y = getY();
         guiGraphics.fillGradient(x, y, x + this.width, y + this.height, this.backgroundColor, this.backgroundColor);
         if (this.backgroundTexture != null) {
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            guiGraphics.blit(this.backgroundTexture.getResourceLocation().get(), x, y, 0.0f, 0.0f, this.width, this.height, this.width, this.height);
-            RenderSystem.disableBlend();
+            this.backgroundTexture.getResourceLocation().ifPresent(location -> {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                guiGraphics.blit(location, x, y, 0.0f, 0.0f, this.width, this.height, this.width, this.height);
+                RenderSystem.disableBlend();
+            });
         }
         double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-        RenderSystem.enableScissor((int) (x * guiScale), (int) (Minecraft.getInstance().getWindow().getHeight() - (((y + this.height) - 20) * guiScale)), (int) (this.width * guiScale), (int) ((this.height - 20) * guiScale));
-        ModelPreviewRenderer.renderLivingEntityPreview(x + (this.width / 2.0f), y + (this.height / 2.0f) + 20.0f, 30.0f, minecraft.getFrameTime(), this.modelIdHolder, RendererManager.getPlayerRenderer(), this.disablePreviewRotation, true);
-        RenderSystem.disableScissor();
+        guiGraphics.flush();
+        if (this.modelIdHolder.isModelReady()) {
+            RenderSystem.enableScissor((int) (x * guiScale), (int) (Minecraft.getInstance().getWindow().getHeight() - (((y + this.height) - 20) * guiScale)), (int) (this.width * guiScale), (int) ((this.height - 20) * guiScale));
+            try {
+                ModelPreviewRenderer.renderLivingEntityPreview(x + (this.width / 2.0f), y + (this.height / 2.0f) + 20.0f, 30.0f, partialTick, this.modelIdHolder, RendererManager.getPlayerRenderer(), this.disablePreviewRotation, true);
+            } finally {
+                RenderSystem.disableScissor();
+            }
+        }
+        guiGraphics.flush();
         int starZ = 3500;
         if (this.foregroundTexture != null) {
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            guiGraphics.blit(this.foregroundTexture.getResourceLocation().get(), x, y, 3500, 0.0f, 0.0f, this.width, this.height, this.width, this.height);
-            RenderSystem.disableBlend();
+            this.foregroundTexture.getResourceLocation().ifPresent(location -> {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                guiGraphics.blit(location, x, y, 3500, 0.0f, 0.0f, this.width, this.height, this.width, this.height);
+                RenderSystem.disableBlend();
+            });
         }
         List listSplit = font.split(getMessage(), 45);
         if (listSplit.size() > 1) {

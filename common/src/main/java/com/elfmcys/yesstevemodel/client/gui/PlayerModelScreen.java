@@ -10,6 +10,7 @@ import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
 import com.elfmcys.yesstevemodel.client.gui.button.*;
 import com.elfmcys.yesstevemodel.client.input.PlayerModelToggleKey;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
+import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.config.ServerConfig;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.util.StringPool;
@@ -23,7 +24,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.systems.RenderSystem;
 import dev.architectury.platform.Platform;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -44,7 +44,10 @@ import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.Nullable;
 import rip.ysm.gpu.GpuCapability;
 
 import java.util.*;
@@ -77,6 +80,12 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
 
     private Category category;
 
+    private boolean selectionMode;
+
+    private final Set<String> selectedModelIds = new HashSet<>();
+
+    private Component selectionStatus = Component.empty();
+
     private static final PlayerPreviewEntity[] previewHolders = new PlayerPreviewEntity[10];
 
     private static final Object2IntMap<String> pageIndexMap = new Object2IntOpenHashMap();
@@ -106,17 +115,11 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         return new ModelButton(x, y, isAuthLocked, previewEntity, modelAssembly);
     }
 
-    public Screen createTextureScreen(PlayerModelScreen other, String str, ModelAssembly modelAssembly) {
-        if (GeneralConfig.TEXTURE_SCREEN_MODE != null && GeneralConfig.TEXTURE_SCREEN_MODE.get() == GeneralConfig.TextureScreenMode.MODERN) {
-            return new rip.ysm.gui.ModernPlayerTextureScreen(other, str, modelAssembly);
-        }
+    public PlayerTextureScreen createTextureScreen(PlayerModelScreen other, String str, ModelAssembly modelAssembly) {
         return new PlayerTextureScreen(other, str, modelAssembly);
     }
 
-    public Screen createModelInfoScreen(PlayerModelScreen other, ModelAssembly modelAssembly) {
-        if (GeneralConfig.MODEL_INFO_SCREEN_MODE != null && GeneralConfig.MODEL_INFO_SCREEN_MODE.get() == GeneralConfig.ModelInfoScreenMode.MODERN) {
-            return new rip.ysm.gui.ModernModelInfoScreen(other, modelAssembly);
-        }
+    public ModelInfoScreen createModelInfoScreen(PlayerModelScreen other, ModelAssembly modelAssembly) {
         return new ModelInfoScreen(other, modelAssembly);
     }
 
@@ -335,7 +338,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         this.searchBox.setValue(value);
         this.searchBox.setTextColor(15986656);
         this.searchBox.setFocused(zIsFocused);
-        this.searchBox.moveCursorToEnd();
+        this.searchBox.moveCursorToEnd(false);
         addWidget(this.searchBox);
         addRenderableWidget(new IconButton(this.guiLeft + 5, this.guiTop + 5, 20, 20, 80, 16, button -> {
             if (Minecraft.getInstance().player != null) {
@@ -360,13 +363,23 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                 navigateUp();
             }).setTooltipText("gui.back"));
         }
-        addRenderableWidget(new Checkbox(this.guiLeft + 5, this.guiTop - 22, 20, 20, Component.translatable("gui.yes_steve_model.show_model_id_first"), GeneralConfig.SHOW_MODEL_ID_FIRST.get(), true) {
-            public void onPress() {
-                super.onPress();
-                GeneralConfig.SHOW_MODEL_ID_FIRST.set(selected());
-                GeneralConfig.SHOW_MODEL_ID_FIRST.save();
+        Component showIdFirstLabel = Component.translatable("gui.yes_steve_model.show_model_id_first");
+        addRenderableWidget(Checkbox.builder(showIdFirstLabel, font).pos(this.guiLeft + 5, this.guiTop - 22).maxWidth(125).selected(GeneralConfig.SHOW_MODEL_ID_FIRST.get()).onValueChange((c, v) -> {
+            GeneralConfig.SHOW_MODEL_ID_FIRST.set(v);
+            GeneralConfig.SHOW_MODEL_ID_FIRST.save();
+        }).build());
+        FlatColorButton selectButton = new FlatColorButton(this.guiLeft + 132, this.guiTop - 22, 44, 14, Component.translatable("gui.yes_steve_model.model_select.select"), button -> {
+            this.selectionMode = !this.selectionMode;
+            if (this.selectionMode) {
+                this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
+            } else {
+                this.selectedModelIds.clear();
+                this.selectionStatus = Component.empty();
             }
+            init();
         });
+        selectButton.setSelected(this.selectionMode);
+        addRenderableWidget(selectButton);
         addRenderableWidget(new IconButton(this.guiLeft + 328, this.guiTop + 5, 18, 18, 32, 0, button4 -> {
             if (this.category != Category.ALL) {
                 this.category = Category.ALL;
@@ -391,16 +404,33 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         addRenderableWidget(new IconButton(this.guiLeft + 397, this.guiTop + 5, 18, 18, 16, 16, button7 -> {
             Minecraft.getInstance().setScreen(new ExtraPlayerConfigScreen(this));
         }).setTooltipText("gui.yes_steve_model.config"));
-        boolean canUpload = ClientModelManager.isAllowUpload() && ClientModelManager.isOysmServer();
-        IconButton uploadButton = new IconButton(this.guiLeft + 377, this.guiTop + 5, 18, 18, 0, 16, button8 -> {
+        IconButton importButton = new IconButton(this.guiLeft + 377, this.guiTop + 5, 18, 18, 0, 16, button8 -> {
             Minecraft.getInstance().setScreen(new ModelUploadScreen(this));
         });
-        uploadButton.active = canUpload;
-        uploadButton.setTooltipLines(java.util.Collections.singletonList(Component.literal(canUpload ? "Upload model to server" : "Server has uploads disabled, or this is not an OpenYSM server")));
-        addRenderableWidget(uploadButton);
+        importButton.setTooltipText("gui.yes_steve_model.import.tooltip");
+        addRenderableWidget(importButton);
         addRenderableWidget(new IconButton(this.guiLeft + 357, this.guiTop + 5, 18, 18, 80, 0, button9 -> {
+            Minecraft.getInstance().setScreen(new ResourceStationScreen(this));
+        }).setTooltipText("gui.yes_steve_model.resource_station.open"));
+        addRenderableWidget(new IconButton(this.guiLeft + 397, this.guiTop + 27, 18, 18, 80, 16, button9 -> {
+            openCategoryManager();
+        }).setTooltipText("gui.yes_steve_model.model_select.category_manage"));
+        addRenderableWidget(new IconButton(this.guiLeft + 377, this.guiTop + 27, 18, 18, 64, 16, button9 -> {
             Minecraft.getInstance().setScreen(new OpenModelFolderScreen(this));
         }).setTooltipText("gui.yes_steve_model.open_model_folder.open"));
+        if (this.selectionMode) {
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.delete"), button -> runDeleteSelection()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 41, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.move"), button -> runMoveSelection()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 77, this.guiTop + 253, 62, 14, Component.translatable("gui.yes_steve_model.model_select.new_category"), button -> openCreateCategoryDialog(null)));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 270, 62, 14, Component.translatable("gui.yes_steve_model.model_select.delete_category"), button -> runDeleteCategory()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 69, this.guiTop + 270, 48, 14, Component.translatable("gui.yes_steve_model.model_select.select_all"), button -> selectAllFilteredModels()));
+            addRenderableWidget(new FlatColorButton(this.guiLeft + 119, this.guiTop + 270, 44, 14, Component.translatable("gui.yes_steve_model.model_select.cancel"), button -> {
+                this.selectedModelIds.clear();
+                this.selectionMode = false;
+                this.selectionStatus = Component.empty();
+                init();
+            }));
+        }
         addRenderableWidget(new FlatColorButton(this.guiLeft + 198, this.guiTop + 215, 52, 14, Component.translatable("gui.yes_steve_model.pre_page"), button10 -> {
             int currentPage = getCurrentPage();
             if (currentPage > 0) {
@@ -443,19 +473,23 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                     boolean isAuthLocked = modelAssembly2.getTextureRegistry().isAuthModel() && !value3.getAuthModels().contains(str2);
                     previewEntity.initModelWithTexture(str2, modelAssembly2.getAnimationBundle().getDefaultTextureName());
                     previewEntity.getAnimationStateMachine().setCurrentAnimation(modelAssembly2.getModelData().getModelProperties().getPreviewAnimation());
-                    addRenderableWidget(createModelButton(slotX, slotY, isAuthLocked, previewEntity, modelAssembly2));
+                    if (this.selectionMode) {
+                        addRenderableWidget(new SelectableModelButton(slotX, slotY, false, previewEntity, modelAssembly2, str2, () -> this.selectedModelIds.contains(str2), this::toggleModelSelection));
+                    } else {
+                        addRenderableWidget(createModelButton(slotX, slotY, isAuthLocked, previewEntity, modelAssembly2));
+                    }
                 });
             }
         }
     }
 
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(guiGraphics);
+        renderTransparentBackground(guiGraphics);
         guiGraphics.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + 135, this.guiTop + 235, -14540254, -14540254);
         guiGraphics.fillGradient(this.guiLeft + 138, this.guiTop, this.guiLeft + 420, this.guiTop + 235, -14540254, -14540254);
         guiGraphics.fillGradient(this.guiLeft + 351, this.guiTop + 7, this.guiLeft + 352, this.guiTop + 21, -790560, -790560);
         this.searchBox.render(guiGraphics, mouseX, mouseY, partialTick);
-        renderModelPreview(guiGraphics, mouseX, mouseY, this.minecraft.getFrameTime());
+        renderModelPreview(guiGraphics, mouseX, mouseY, partialTick);
         if (this.searchBox.getValue().isEmpty() && !this.searchBox.isFocused()) {
             guiGraphics.drawString(this.font, Component.translatable("gui.yes_steve_model.search").withStyle(ChatFormatting.ITALIC), this.guiLeft + 148, this.guiTop + 10, 7829367);
         }
@@ -484,6 +518,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             }
         }
         renderSyncStatus(guiGraphics);
+        renderSelectionStatus(guiGraphics);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         ((ScreenAccessor) this).ysm$getRenderables().stream().filter(renderable -> {
             return renderable instanceof IconButton;
@@ -539,16 +574,30 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         guiGraphics.drawString(this.font, mutableComponentLiteral, iWidth, i + Math.round((14 - 9) / 2.0f), ChatFormatting.DARK_GRAY.getColor().intValue());
     }
 
+    private void renderSelectionStatus(GuiGraphics guiGraphics) {
+        boolean hasStatus = StringUtils.isNotBlank(this.selectionStatus.getString());
+        if (!this.selectionMode && !hasStatus) {
+            return;
+        }
+        Component text = hasStatus ? this.selectionStatus : Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
+        List<FormattedCharSequence> lines = this.font.split(text.copy().withStyle(ChatFormatting.GRAY), 170);
+        if (!lines.isEmpty()) {
+            guiGraphics.drawString(this.font, lines.get(0), this.guiLeft + 5, this.guiTop + 238, 0xFFF3F3E0);
+        }
+    }
+
     public void renderModelPreview(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         LocalPlayer localPlayer = Minecraft.getInstance().player;
         if (localPlayer != null) {
-            double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-            RenderSystem.enableScissor((int) ((this.guiLeft + 5) * guiScale), (int) (Minecraft.getInstance().getWindow().getHeight() - ((this.guiTop + 200) * guiScale)), (int) (125.0d * guiScale), (int) (171.0d * guiScale));
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(0.0f, 0.0f, 100.0f);
-            InventoryScreen.renderEntityInInventoryFollowsMouse(guiGraphics, this.guiLeft + 67, this.guiTop + 190, 70, (this.guiLeft + 67) - mouseX, ((this.guiTop + 180) - 95) - mouseY, localPlayer);
+            // 1.21.1 的签名为 (GuiGraphics, x1, y1, x2, y2, scale, yOffset, mouseX, mouseY, entity),
+            // 其中 (x1,y1)-(x2,y2) 既决定模型居中位置, 也是该方法内部 enableScissor 的裁剪框.
+            // 旧 (1.20.x) 调用方式参数错位会让 x2 < x1, 造成内部裁剪框为空, 模型完全不渲染.
+            float previewCenterX = this.guiLeft + 67.5f;
+            float previewCenterY = this.guiTop + 114.5f;
+            renderFrontFacingInventoryEntity(guiGraphics, this.guiLeft + 5, this.guiTop + 29, this.guiLeft + 130, this.guiTop + 200, 70, 0.0625f, previewCenterX, previewCenterY, mouseX, mouseY, localPlayer);
             guiGraphics.pose().popPose();
-            RenderSystem.disableScissor();
             PlayerCapability.get(localPlayer).ifPresent(cap -> {
                 List<FormattedCharSequence> listSplit = this.font.split(FormattedText.of(ClientModelManager.getModelContext(cap.getModelId()).map(it -> {
                     Metadata metadata2 = it.getModelData().getExtraInfo();
@@ -568,6 +617,49 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         }
     }
 
+    private static void renderFrontFacingInventoryEntity(GuiGraphics guiGraphics, int left, int top, int right, int bottom, int scale, float yOffset, float centerX, float centerY, int mouseX, int mouseY, LocalPlayer player) {
+        guiGraphics.enableScissor(left, top, right, bottom);
+        float yawMouse = (float) Math.atan((centerX - mouseX) / 40.0f);
+        float pitchMouse = (float) Math.atan((centerY - mouseY) / 40.0f);
+        Quaternionf modelRotation = new Quaternionf().rotateZ((float) Math.PI);
+        Quaternionf cameraRotation = new Quaternionf().rotateX(pitchMouse * 20.0f * ((float) Math.PI / 180.0f));
+        modelRotation.mul(cameraRotation);
+
+        float oldBodyRot = player.yBodyRot;
+        float oldBodyRotO = player.yBodyRotO;
+        float oldYRot = player.getYRot();
+        float oldYRotO = player.yRotO;
+        float oldXRot = player.getXRot();
+        float oldXRotO = player.xRotO;
+        float oldHeadRotO = player.yHeadRotO;
+        float oldHeadRot = player.yHeadRot;
+        try {
+            ModelPreviewRenderer.setInventoryPreviewFrontFacing(true);
+            player.yBodyRot = 180.0f + (yawMouse * 20.0f);
+            player.yBodyRotO = player.yBodyRot;
+            player.setYRot(180.0f + (yawMouse * 40.0f));
+            player.yRotO = player.getYRot();
+            player.setXRot(-pitchMouse * 20.0f);
+            player.xRotO = player.getXRot();
+            player.yHeadRot = player.getYRot();
+            player.yHeadRotO = player.getYRot();
+            float entityScale = player.getScale();
+            Vector3f offset = new Vector3f(0.0f, (player.getBbHeight() / 2.0f) + (yOffset * entityScale), 0.0f);
+            InventoryScreen.renderEntityInInventory(guiGraphics, centerX, centerY, scale / entityScale, offset, modelRotation, cameraRotation, player);
+        } finally {
+            ModelPreviewRenderer.setInventoryPreviewFrontFacing(false);
+            player.yBodyRot = oldBodyRot;
+            player.yBodyRotO = oldBodyRotO;
+            player.setYRot(oldYRot);
+            player.yRotO = oldYRotO;
+            player.setXRot(oldXRot);
+            player.xRotO = oldXRotO;
+            player.yHeadRotO = oldHeadRotO;
+            player.yHeadRot = oldHeadRot;
+            guiGraphics.disableScissor();
+        }
+    }
+
     public void resize(Minecraft minecraft, int width, int height) {
         String value = this.searchBox.getValue();
         super.resize(minecraft, width, height);
@@ -575,7 +667,166 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
     }
 
     public void tick() {
-        this.searchBox.tick();
+    }
+
+    private void openCategoryManager() {
+        if (!ModelPanelFileActions.canWriteServerModelDirectory()) {
+            showCategoryActionMessage(Component.translatable("gui.yes_steve_model.model_select.error.read_only"));
+            return;
+        }
+        List<String> categories = ModelPanelFileActions.listCategories();
+        if (StringUtils.isNotBlank(currentPath)) {
+            String currentCategory = currentPath.endsWith("/") ? currentPath.substring(0, currentPath.length() - 1) : currentPath;
+            Minecraft.getInstance().setScreen(new CategorySelectScreen(this,
+                    Component.translatable("gui.yes_steve_model.model_select.category_manage"),
+                    Lists.newArrayList(
+                            Component.translatable("gui.yes_steve_model.model_select.rename_category").getString(),
+                            Component.translatable("gui.yes_steve_model.model_select.delete_category").getString(),
+                            Component.translatable("gui.yes_steve_model.model_select.new_category").getString()
+                    ),
+                    action -> handleCurrentCategoryAction(currentCategory, action),
+                    () -> openCreateCategoryDialog(null)));
+        } else {
+            Minecraft.getInstance().setScreen(new CategorySelectScreen(this,
+                    Component.translatable("gui.yes_steve_model.model_select.select_category"),
+                    categories,
+                    category -> {
+                        currentPath = category.endsWith("/") ? category : category + "/";
+                        resetCurrentPage();
+                        init();
+                    },
+                    () -> openCreateCategoryDialog(null)));
+        }
+    }
+
+    private void handleCurrentCategoryAction(String category, String action) {
+        String rename = Component.translatable("gui.yes_steve_model.model_select.rename_category").getString();
+        String delete = Component.translatable("gui.yes_steve_model.model_select.delete_category").getString();
+        if (action.equals(rename)) {
+            Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.rename_category"), category, value -> {
+                Component result = ModelPanelFileActions.renameCategory(category, value);
+                String normalized = ModelPanelFileActions.normalizeCategory(value);
+                if (!normalized.isBlank()) {
+                    currentPath = normalized + "/";
+                }
+                showCategoryActionMessage(result);
+            }));
+        } else if (action.equals(delete)) {
+            Minecraft.getInstance().setScreen(new CategoryDeleteConfirmScreen(this, category, deleteModels -> {
+                Component result = ModelPanelFileActions.deleteCategory(category, deleteModels);
+                currentPath = getParentPath(category + "/");
+                showCategoryActionMessage(result);
+            }));
+        } else {
+            openCreateCategoryDialog(category);
+        }
+    }
+
+    private void openCreateCategoryDialog(@Nullable String parentCategory) {
+        String prefix = StringUtils.isBlank(parentCategory) ? StringPool.EMPTY : parentCategory + "/";
+        Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.new_category"), prefix, value -> {
+            Component result = ModelPanelFileActions.createCategory(value);
+            String normalized = ModelPanelFileActions.normalizeCategory(value);
+            if (!normalized.isBlank()) {
+                currentPath = normalized + "/";
+            }
+            showCategoryActionMessage(result);
+        }));
+    }
+
+    private void showCategoryActionMessage(Component message) {
+        if (Minecraft.getInstance().player != null) {
+            Minecraft.getInstance().player.displayClientMessage(message, false);
+        }
+        this.modelPackMap.clear();
+        this.modelPackMap.putAll(ClientModelManager.getModelPackMap());
+        resetCurrentPage();
+        init();
+    }
+
+    private void toggleModelSelection(String modelId) {
+        if (!this.selectedModelIds.add(modelId)) {
+            this.selectedModelIds.remove(modelId);
+        }
+        this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
+        init();
+    }
+
+    private void selectAllFilteredModels() {
+        this.selectedModelIds.addAll(this.sortedModelKeys);
+        this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
+        init();
+    }
+
+    private void runDeleteSelection() {
+        if (this.selectedModelIds.isEmpty()) {
+            this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", 0);
+            init();
+            return;
+        }
+        Component result = ModelPanelFileActions.deleteModels(new HashSet<>(this.selectedModelIds));
+        this.selectedModelIds.clear();
+        this.selectionMode = false;
+        showSelectionActionMessage(result);
+    }
+
+    private void runMoveSelection() {
+        if (this.selectedModelIds.isEmpty()) {
+            this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", 0);
+            init();
+            return;
+        }
+        if (!ModelPanelFileActions.canWriteServerModelDirectory()) {
+            showSelectionActionMessage(Component.translatable("gui.yes_steve_model.model_select.error.read_only"));
+            return;
+        }
+        Minecraft.getInstance().setScreen(new CategorySelectScreen(this,
+                Component.translatable("gui.yes_steve_model.model_select.choose_category"),
+                ModelPanelFileActions.listCategories(),
+                category -> {
+                    Component result = ModelPanelFileActions.moveModels(new HashSet<>(this.selectedModelIds), category);
+                    this.selectedModelIds.clear();
+                    this.selectionMode = false;
+                    showSelectionActionMessage(result);
+                },
+                () -> Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.new_category_prompt"), StringPool.EMPTY, category -> {
+                    ModelPanelFileActions.createCategory(category);
+                    Component result = ModelPanelFileActions.moveModels(new HashSet<>(this.selectedModelIds), category);
+                    this.selectedModelIds.clear();
+                    this.selectionMode = false;
+                    showSelectionActionMessage(result);
+                }))));
+    }
+
+    private void runDeleteCategory() {
+        if (!ModelPanelFileActions.canWriteServerModelDirectory()) {
+            showSelectionActionMessage(Component.translatable("gui.yes_steve_model.model_select.error.read_only"));
+            return;
+        }
+        Minecraft.getInstance().setScreen(new CategorySelectScreen(this,
+                Component.translatable("gui.yes_steve_model.model_select.delete_category"),
+                ModelPanelFileActions.listCategories(),
+                category -> Minecraft.getInstance().setScreen(new CategoryDeleteConfirmScreen(this, category, deleteModels -> {
+                    Component result = ModelPanelFileActions.deleteCategory(category, deleteModels);
+                    String path = category.endsWith("/") ? category : category + "/";
+                    if (currentPath.equals(path) || currentPath.startsWith(path)) {
+                        currentPath = getParentPath(path);
+                    }
+                    this.selectionMode = false;
+                    showSelectionActionMessage(result);
+                })),
+                null));
+    }
+
+    private void showSelectionActionMessage(Component message) {
+        this.selectionStatus = message;
+        if (Minecraft.getInstance().player != null) {
+            Minecraft.getInstance().player.displayClientMessage(message, false);
+        }
+        this.modelPackMap.clear();
+        this.modelPackMap.putAll(ClientModelManager.getModelPackMap());
+        resetCurrentPage();
+        init();
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -654,7 +905,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         if (delta != 0.0d && isInModelArea(mouseX, mouseY)) {
             return handleScrollPage(delta);
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, delta, delta);
     }
 
     private boolean isInModelArea(double mouseX, double mouseY) {

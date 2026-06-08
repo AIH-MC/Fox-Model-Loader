@@ -18,6 +18,7 @@ public class PlayerCustomAnimationPredicate implements IAnimationPredicate<Custo
             return IAnimationPredicate.playLoopAnimation(event, str);
         }
         previewAnimatable.setCustomAnimationActive(false);
+        event.getController().clearAnimation();
         event.getController().markDirty();
         return PlayState.STOP;
     }

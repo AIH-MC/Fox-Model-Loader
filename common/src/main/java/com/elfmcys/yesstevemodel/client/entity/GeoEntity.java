@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.client.entity;
 
+import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.audio.*;
 import com.elfmcys.yesstevemodel.geckolib3.geo.render.built.GeoModel;
@@ -211,13 +212,21 @@ public abstract class GeoEntity<T extends Entity> extends AnimatableEntity<T> {
     public void submitAsyncUpdate(float partialTick) {
         UnsafeUtil.getUnsafe().storeFence();
         this.modelFuture = YSMThreadPool.submitCallable(() -> {
+            PlayerCapability playerCapability = this instanceof PlayerCapability cap ? cap : null;
+            if (playerCapability != null) {
+                playerCapability.beginCapturedRenderState();
+            }
             try {
-                AnimationEvent<?> event = super.processAnimationImpl(partialTick, true);
+                AnimationEvent<?> event = super.processAnimationImpl(partialTick, false);
                 UnsafeUtil.getUnsafe().storeFence();
                 return event;
             } catch (Throwable th) {
                 UnsafeUtil.getUnsafe().storeFence();
                 throw th;
+            } finally {
+                if (playerCapability != null) {
+                    playerCapability.endRenderState();
+                }
             }
         });
     }
@@ -226,10 +235,12 @@ public abstract class GeoEntity<T extends Entity> extends AnimatableEntity<T> {
     @Nullable
     public AnimationEvent<?> processAnimationImpl(float partialTick, boolean isFirstPerson) {
         RenderSystem.assertOnRenderThread();
-        if (isFirstPerson && this.modelFuture != null) {
-            return awaitAsyncResult();
+        if (this.modelFuture != null) {
+            AnimationEvent<?> event = awaitAsyncResult();
+            if (event != null) {
+                return event;
+            }
         }
-        awaitAsyncResult();
         return super.processAnimationImpl(partialTick, isFirstPerson);
     }
 

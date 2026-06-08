@@ -28,6 +28,7 @@ public final class GpuRenderPath {
     private static final AtomicLong ref = new AtomicLong(1);
     private static final Matrix4f pivotAbsScratchMat = new Matrix4f();
     private static int[] pivotAbsPathScratch = new int[64];
+    private static final RenderStateCache stateCache = new RenderStateCache();
 
     public static boolean tryRender(
             GeoModel model,
@@ -38,11 +39,13 @@ public final class GpuRenderPath {
             int packedLight,
             int packedOverlay,
             float r, float g, float b, float a,
-            ResourceLocation textureLocation
+            ResourceLocation textureLocation,
+            boolean translucentTexture
     ) {
         if (!GpuCapability.isAvailable()) return false;
         if (!BoneSkinShader.ensureCompiled()) return false;
         if (model.bakedBones == null || model.bakedBones.isEmpty()) return false;
+        stateCache.invalidate();
 
         if (model.gpuMeshHandle == 0) {
             GpuMesh mesh = GpuMeshBuilder.build(model);
@@ -80,26 +83,26 @@ public final class GpuRenderPath {
         AbstractTexture modelTex = mc.getTextureManager().getTexture(textureLocation);
         int modelTexId = modelTex.getId();
 
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + 2);
+        stateCache.activeTexture(GL13.GL_TEXTURE0 + 2);
         mc.gameRenderer.lightTexture().turnOnLightLayer();
 
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + 1);
+        stateCache.activeTexture(GL13.GL_TEXTURE0 + 1);
         mc.gameRenderer.overlayTexture().setupOverlayColor();
         GlStateManager._bindTexture(RenderSystem.getShaderTexture(1)); // overlayTexture里的texture没getter，固定bind 1
 
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0);
-        GlStateManager._bindTexture(modelTexId);
+        stateCache.activeTexture(GL13.GL_TEXTURE0);
+        stateCache.bindTexture(modelTexId);
 
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, mesh.boneSsbo);
+        stateCache.bindSsbo(mesh.boneSsbo);
         GL15.glBufferSubData(GL43.GL_SHADER_STORAGE_BUFFER, 0L, boneBuf);
-        GL43.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, BoneSkinShader.ssbo, mesh.boneSsbo);
+        stateCache.bindSsboBase(BoneSkinShader.ssbo, mesh.boneSsbo);
 
         float fogStart = RenderSystem.getShaderFogStart();
         float fogEnd = RenderSystem.getShaderFogEnd();
         float[] fogColor = RenderSystem.getShaderFogColor();
         int fogShape = RenderSystem.getShaderFogShape().getIndex();
 
-        GlStateManager._glUseProgram(BoneSkinShader.program());
+        stateCache.useProgram(BoneSkinShader.program());
         if (BoneSkinShader.locProj() >= 0) GL20.glUniformMatrix4fv(BoneSkinShader.locProj(), false, projScratch);
         if (BoneSkinShader.locColor() >= 0) GL20.glUniform4f(BoneSkinShader.locColor(), r, g, b, a);
         if (BoneSkinShader.locOverlay() >= 0) GL20.glUniform1i(BoneSkinShader.locOverlay(), packedOverlay);
@@ -126,16 +129,18 @@ public final class GpuRenderPath {
             if (BoneSkinShader.locAlphaMode() >= 0) GL20.glUniform1i(BoneSkinShader.locAlphaMode(), 1);
             GL11.glDrawElements(GL11.GL_TRIANGLES, drawCount, GL11.GL_UNSIGNED_INT, offsetBytes);
 
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            if (BoneSkinShader.locAlphaMode() >= 0) GL20.glUniform1i(BoneSkinShader.locAlphaMode(), 2);
-            GL11.glDrawElements(GL11.GL_TRIANGLES, drawCount, GL11.GL_UNSIGNED_INT, offsetBytes);
-            RenderSystem.disableBlend();
+            if (translucentTexture) {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                if (BoneSkinShader.locAlphaMode() >= 0) GL20.glUniform1i(BoneSkinShader.locAlphaMode(), 2);
+                GL11.glDrawElements(GL11.GL_TRIANGLES, drawCount, GL11.GL_UNSIGNED_INT, offsetBytes);
+                RenderSystem.disableBlend();
+            }
         }
 
-        GL43.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, BoneSkinShader.ssbo, 0);
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-        GlStateManager._glUseProgram(0);
+        stateCache.bindSsboBase(BoneSkinShader.ssbo, 0);
+        stateCache.bindSsbo(0);
+        stateCache.useProgram(0);
 
         com.mojang.blaze3d.vertex.BufferUploader.invalidate();
         GlStateManager._glBindVertexArray(0);
@@ -258,6 +263,69 @@ public final class GpuRenderPath {
             }
 
             localMat.translate(-bone.pivotX / 16.0f, -bone.pivotY / 16.0f, -bone.pivotZ / 16.0f);
+        }
+    }
+
+    private static final class RenderStateCache {
+        private final int[] textureIds = new int[8];
+        private final int[] ssboBases = new int[8];
+        private int activeTexture = -1;
+        private int ssbo = -1;
+        private int program = -1;
+
+        void invalidate() {
+            java.util.Arrays.fill(textureIds, -1);
+            java.util.Arrays.fill(ssboBases, -1);
+            activeTexture = -1;
+            ssbo = -1;
+            program = -1;
+        }
+
+        void activeTexture(int id) {
+            if (activeTexture == id) {
+                return;
+            }
+            GlStateManager._activeTexture(id);
+            activeTexture = id;
+        }
+
+        void bindTexture(int id) {
+            int unit = Math.max(0, activeTexture - GL13.GL_TEXTURE0);
+            if (unit >= textureIds.length) {
+                GlStateManager._bindTexture(id);
+                return;
+            }
+            if (textureIds[unit] == id) {
+                return;
+            }
+            GlStateManager._bindTexture(id);
+            textureIds[unit] = id;
+        }
+
+        void bindSsbo(int id) {
+            if (ssbo == id) {
+                return;
+            }
+            GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, id);
+            ssbo = id;
+        }
+
+        void bindSsboBase(int index, int id) {
+            if (index >= 0 && index < ssboBases.length && ssboBases[index] == id) {
+                return;
+            }
+            GL43.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, index, id);
+            if (index >= 0 && index < ssboBases.length) {
+                ssboBases[index] = id;
+            }
+        }
+
+        void useProgram(int id) {
+            if (program == id) {
+                return;
+            }
+            GlStateManager._glUseProgram(id);
+            program = id;
         }
     }
 }

@@ -25,9 +25,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.Arrays;
 
 public class NativeModelRenderer {
     private static final Matrix4f projectionModelViewMatrix = new Matrix4f();
+    private static final ThreadLocal<RenderScratch> FALLBACK_SCRATCH = ThreadLocal.withInitial(RenderScratch::new);
 
     public static void renderMesh(VertexConsumer buffer, PoseStack.Pose pose, GeoModel model, float[] boneParams, float[] stateBuffer, int textureIndex, int renderPartMask, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
         renderMesh(buffer, pose, model, boneParams, stateBuffer, textureIndex, renderPartMask, packedLight, packedOverlay, red, green, blue, alpha, null);
@@ -37,6 +39,25 @@ public class NativeModelRenderer {
         OculusCompat.updatePBRState();
         RenderSystem.getProjectionMatrix().mul(RenderSystem.getModelViewMatrix(), projectionModelViewMatrix);
         boolean isPreview = ModelPreviewRenderer.isPreview() || ModelPreviewRenderer.isExtraPlayer();
+
+        if (isPreview) {
+            renderModel(
+                    buffer,
+                    pose,
+                    projectionModelViewMatrix,
+                    OptiFineDetector.isOptifinePresent(),
+                    model,
+                    boneParams,
+                    stateBuffer,
+                    textureIndex,
+                    renderPartMask,
+                    packedLight,
+                    packedOverlay,
+                    red, green, blue, alpha,
+                    true
+            );
+            return;
+        }
 
         if (textureLocation != null && NativeLibLoader.isLoaded() && !GeneralConfig.USE_COMPATIBILITY_RENDERER.get() && GeneralConfig.USE_GPU_RENDERER.get()) {
 
@@ -52,7 +73,7 @@ public class NativeModelRenderer {
                     return;
                 }
             } else {
-                if (GpuRenderPath.tryRender(model, pose, boneParams, stateBuffer, renderPartMask, packedLight, packedOverlay, red, green, blue, alpha, textureLocation)) {
+                if (GpuRenderPath.tryRender(model, pose, boneParams, stateBuffer, renderPartMask, packedLight, packedOverlay, red, green, blue, alpha, textureLocation, model.isTranslucentTexture(textureIndex))) {
                     return;
                 }
             }
@@ -107,28 +128,32 @@ public class NativeModelRenderer {
             boolean isPreview) {
 
         if (mesh.bakedBones == null || mesh.bakedBones.isEmpty()) return;
+        RenderScratch scratch = FALLBACK_SCRATCH.get();
+        scratch.ensureBoneCapacity(mesh.bakedBones.size());
 
         // TODO: 修復GC壓力
         Matrix4f rootPoseMat = pose.pose();
         Matrix3f rootNormalMC = pose.normal();
         Matrix4f projMat = RenderSystem.getProjectionMatrix();
 
-        Matrix4f identityMat = new Matrix4f();
-        Matrix4f globalBoneMat = new Matrix4f();
-        Matrix4f projBoneMat = new Matrix4f();
-        Matrix3f localNormalMat = new Matrix3f();
-        Matrix3f globalNormalMat = new Matrix3f();
+        Matrix4f identityMat = scratch.identityMat.identity();
+        Matrix4f globalBoneMat = scratch.globalBoneMat;
+        Matrix4f projBoneMat = scratch.projBoneMat;
+        Matrix3f localNormalMat = scratch.localNormalMat;
+        Matrix3f globalNormalMat = scratch.globalNormalMat;
 
-        Vector4f p1 = new Vector4f();
-        Vector4f p2 = new Vector4f();
-        Vector4f p3 = new Vector4f();
-        Vector4f tempPos = new Vector4f();
-        Vector3f tempNorm = new Vector3f();
-        Matrix4f[] boneLocalTransforms = new Matrix4f[mesh.bakedBones.size()];
-        boolean[] boneVisible = new boolean[mesh.bakedBones.size()];
+        Vector4f p1 = scratch.p1;
+        Vector4f p2 = scratch.p2;
+        Vector4f p3 = scratch.p3;
+        Vector4f tempPos = scratch.tempPos;
+        Vector3f tempNorm = scratch.tempNorm;
+        Matrix4f[] boneLocalTransforms = scratch.boneLocalTransforms;
+        boolean[] boneVisible = scratch.boneVisible;
+        boolean[] boneComputed = scratch.boneComputed;
+        Arrays.fill(boneComputed, 0, mesh.bakedBones.size(), false);
 
         for (int i = 0; i < mesh.bakedBones.size(); i++) {
-            calculateBoneMatrix(i, mesh.bakedBones, boneParams, boneLocalTransforms, boneVisible, identityMat, stateBuffer);
+            calculateBoneMatrix(i, mesh.bakedBones, boneParams, boneLocalTransforms, boneVisible, boneComputed, identityMat, stateBuffer);
         }
 
         for (int i = 0; i < mesh.bakedBones.size(); i++) {
@@ -145,6 +170,11 @@ public class NativeModelRenderer {
             globalBoneMat.set(rootPoseMat).mul(localBoneMat);
             projBoneMat.set(projMat).mul(globalBoneMat);
 
+            // 当骨骼变换被镜像(行列式为负, 如原版物品栏预览把 -Z 翻转放进 pose)时, 屏幕空间绕序翻转,
+            // 这里基于投影绕序的手动背面剔除会剔错面、导致模型残缺(GUI 左侧预览破损)。
+            // 由于模型使用 NoCull 渲染类型, 仅靠深度测试即可正确显示, 故镜像情况下跳过手动剔除。
+            boolean cullFaces = globalBoneMat.determinant3x3() >= 0.0f;
+
             // 法線全域矩陣
             localBoneMat.normal(localNormalMat);
             globalNormalMat.set(rootNormalMC).mul(localNormalMat);
@@ -153,7 +183,7 @@ public class NativeModelRenderer {
 
             for (GeoModel.BakedCube cube : bone.cubes) {
                 for (GeoModel.BakedQuad quad : cube.quads) {
-                    if (cube.cullable) {
+                    if (cube.cullable && cullFaces) {
                         p1.set(quad.positions[0].x(), quad.positions[0].y(), quad.positions[0].z(), 1.0f).mul(projBoneMat);
                         p2.set(quad.positions[1].x(), quad.positions[1].y(), quad.positions[1].z(), 1.0f).mul(projBoneMat);
                         p3.set(quad.positions[2].x(), quad.positions[2].y(), quad.positions[2].z(), 1.0f).mul(projBoneMat);
@@ -165,29 +195,34 @@ public class NativeModelRenderer {
                     tempNorm.set(quad.normal).mul(globalNormalMat).normalize();
                     for (int v = 0; v < 4; v++) {
                         tempPos.set(quad.positions[v].x(), quad.positions[v].y(), quad.positions[v].z(), 1.0f).mul(globalBoneMat);
-                        vertexConsumer.vertex(tempPos.x(), tempPos.y(), tempPos.z(), r, g, b, a, quad.uvs[v].x(), quad.uvs[v].y(), packedOverlay, currentPackedLight, tempNorm.x(), tempNorm.y(), tempNorm.z());
+                        vertexConsumer.addVertex(tempPos.x(), tempPos.y(), tempPos.z(), ((int)(a * 255) << 24) | ((int)(r * 255) << 16) | ((int)(g * 255) << 8) | (int)(b * 255), quad.uvs[v].x(), quad.uvs[v].y(), packedOverlay, currentPackedLight, tempNorm.x(), tempNorm.y(), tempNorm.z());
                     }
                 }
             }
         }
     }
 
-    private static Matrix4f calculateBoneMatrix(int idx, java.util.List<GeoModel.BakedBone> bones, float[] boneParams, Matrix4f[] cache, boolean[] visibleCache, Matrix4f rootPose, float[] stateBuffer) {
-        if (cache[idx] != null) return cache[idx];
+    private static Matrix4f calculateBoneMatrix(int idx, java.util.List<GeoModel.BakedBone> bones, float[] boneParams, Matrix4f[] cache, boolean[] visibleCache, boolean[] computedCache, Matrix4f rootPose, float[] stateBuffer) {
+        if (computedCache[idx]) return cache[idx];
 
         GeoModel.BakedBone bone = bones.get(idx);
         Matrix4f parentMatrix = rootPose;
         boolean isVisible = true;
 
         if (bone.parentIdx != -1) {
-            parentMatrix = calculateBoneMatrix(bone.parentIdx, bones, boneParams, cache, visibleCache, rootPose, stateBuffer);
+            parentMatrix = calculateBoneMatrix(bone.parentIdx, bones, boneParams, cache, visibleCache, computedCache, rootPose, stateBuffer);
             // 如果父骨骼不可見，子骨骼必然跟著不可見
             if (!visibleCache[bone.parentIdx]) {
                 isVisible = false;
             }
         }
 
-        Matrix4f localMat = new Matrix4f(parentMatrix);
+        Matrix4f localMat = cache[idx];
+        if (localMat == null) {
+            localMat = new Matrix4f();
+            cache[idx] = localMat;
+        }
+        localMat.set(parentMatrix);
 
         int pOffset = idx * 12;
         float animRx = boneParams[pOffset];
@@ -243,6 +278,7 @@ public class NativeModelRenderer {
 
         cache[idx] = localMat;
         visibleCache[idx] = isVisible; // 保存當前骨骼的可見性
+        computedCache[idx] = true;
         return localMat;
     }
 
@@ -254,16 +290,12 @@ public class NativeModelRenderer {
         VertexConsumer vc = (VertexConsumer) v;
         int fIdx = 0, iIdx = 0;
         for (int n = 0; n < vertexCount; n++) {
-            vc.vertex(
-                    // position
+            int packedColor = ((int)(f.get(fIdx + 6) * 255) << 24) | ((int)(f.get(fIdx + 3) * 255) << 16) | ((int)(f.get(fIdx + 4) * 255) << 8) | (int)(f.get(fIdx + 5) * 255);
+            vc.addVertex(
                     f.get(fIdx),     f.get(fIdx + 1), f.get(fIdx + 2),
-                    // rgba
-                    f.get(fIdx + 3), f.get(fIdx + 4), f.get(fIdx + 5), f.get(fIdx + 6),
-                    // uv
+                    packedColor,
                     f.get(fIdx + 7), f.get(fIdx + 8),
-                    // overlay light
                     in.get(iIdx),    in.get(iIdx + 1),
-                    // normal
                     f.get(fIdx + 9), f.get(fIdx + 10), f.get(fIdx + 11)
             );
             fIdx += 12;
@@ -295,5 +327,31 @@ public class NativeModelRenderer {
                 packedLight, packedOverlay,
                 r, g, b, a
         );
+    }
+
+    private static final class RenderScratch {
+        private final Matrix4f identityMat = new Matrix4f();
+        private final Matrix4f globalBoneMat = new Matrix4f();
+        private final Matrix4f projBoneMat = new Matrix4f();
+        private final Matrix3f localNormalMat = new Matrix3f();
+        private final Matrix3f globalNormalMat = new Matrix3f();
+        private final Vector4f p1 = new Vector4f();
+        private final Vector4f p2 = new Vector4f();
+        private final Vector4f p3 = new Vector4f();
+        private final Vector4f tempPos = new Vector4f();
+        private final Vector3f tempNorm = new Vector3f();
+        private Matrix4f[] boneLocalTransforms = new Matrix4f[0];
+        private boolean[] boneVisible = new boolean[0];
+        private boolean[] boneComputed = new boolean[0];
+
+        private void ensureBoneCapacity(int size) {
+            if (boneLocalTransforms.length >= size) {
+                return;
+            }
+            int newSize = Math.max(size, boneLocalTransforms.length == 0 ? 16 : boneLocalTransforms.length * 2);
+            boneLocalTransforms = Arrays.copyOf(boneLocalTransforms, newSize);
+            boneVisible = Arrays.copyOf(boneVisible, newSize);
+            boneComputed = Arrays.copyOf(boneComputed, newSize);
+        }
     }
 }

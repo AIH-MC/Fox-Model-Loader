@@ -31,6 +31,7 @@ public final class ClientTickEvent {
         UploadManager.processPendingUploads();
         ModelUploadSession.tickCurrent();
         ClientModelManager.flushPendingModels();
+        ClientModelManager.trimUnusedGpuCaches();
         ObjectPool.cleanup();
         refreshRate = client.getWindow().getRefreshRate();
         LocalPlayer localPlayer = client.player;

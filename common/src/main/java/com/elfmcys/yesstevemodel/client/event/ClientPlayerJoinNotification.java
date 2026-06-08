@@ -26,6 +26,7 @@ public final class ClientPlayerJoinNotification {
             return;
         }
         ClientModelManager.runPendingModelCallback();
+        ClientModelManager.restoreSelectedLocalOnlyModel();
         notified = true;
         if (!YesSteveModel.isAvailable()) {
             YesSteveModel.sendUnavailableMessage();

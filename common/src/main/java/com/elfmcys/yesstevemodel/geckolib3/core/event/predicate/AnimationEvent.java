@@ -36,7 +36,7 @@ public class AnimationEvent<T extends AnimatableEntity<?>> {
         this.tickCount = tickCount;
         this.partialTick = partialTick;
         this.frameTime = frameTime;
-        this.currentTick = tickCount + frameTime;
+        this.currentTick = tickCount + partialTick;
         this.isMoving = isMoving;
         this.isFirstPerson = z2;
         this.modelData = modelData;

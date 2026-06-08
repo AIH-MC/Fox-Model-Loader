@@ -15,7 +15,7 @@ public abstract class PlayerRendererMixin {
 
     @Inject(method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"), cancellable = true)
     private void ysm$onRenderPlayerPre(AbstractClientPlayer entity, float entityYaw, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, CallbackInfo ci) {
-        if (ReplacePlayerRenderEvent.onRenderPlayerPre(entity, partialTick, poseStack, bufferSource, packedLight)) {
+        if (ReplacePlayerRenderEvent.onRenderPlayerPre(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight)) {
             ci.cancel();
         }
     }

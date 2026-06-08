@@ -28,7 +28,9 @@ public class AudioCacheBuilder {
     public void appendAudio(ByteBuffer byteBuffer) {
         if (!this.isClosed && this.audioBuffer.writableBytes() > 0) {
             int iMin = Math.min(this.audioBuffer.writableBytes(), byteBuffer.remaining());
-            this.audioBuffer.writeBytes(byteBuffer.limit(iMin));
+            ByteBuffer chunk = byteBuffer.duplicate();
+            chunk.limit(chunk.position() + iMin);
+            this.audioBuffer.writeBytes(chunk);
             this.chunkSizes.add(iMin);
         }
     }

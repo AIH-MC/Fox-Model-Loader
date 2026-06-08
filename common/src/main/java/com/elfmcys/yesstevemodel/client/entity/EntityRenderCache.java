@@ -1,11 +1,13 @@
 package com.elfmcys.yesstevemodel.client.entity;
 
+import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import it.unimi.dsi.fastutil.objects.ObjectListIterator;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.Projectile;
 
@@ -39,10 +41,12 @@ public class EntityRenderCache {
                     if (entity instanceof AbstractClientPlayer) {
                         if (entity instanceof LocalPlayer) {
                             if (!GeneralConfig.DISABLE_SELF_MODEL.get()) {
+                                capturePlayerState(geoEntity, (AbstractClientPlayer) entity, partialTick);
                                 geoEntity.submitAsyncUpdate(partialTick);
                                 strongRefs.add(geoEntity);
                             }
                         } else if (!GeneralConfig.DISABLE_OTHER_MODEL.get()) {
+                            capturePlayerState(geoEntity, (AbstractClientPlayer) entity, partialTick);
                             geoEntity.submitAsyncUpdate(partialTick);
                             strongRefs.add(geoEntity);
                         }
@@ -57,6 +61,12 @@ public class EntityRenderCache {
                     }
                 }
             }
+        }
+    }
+
+    private static void capturePlayerState(GeoEntity<?> geoEntity, AbstractClientPlayer player, float partialTick) {
+        if (geoEntity instanceof PlayerCapability capability) {
+            capability.captureFrameRenderState(Mth.rotLerp(partialTick, player.yBodyRotO, player.yBodyRot), partialTick);
         }
     }
 

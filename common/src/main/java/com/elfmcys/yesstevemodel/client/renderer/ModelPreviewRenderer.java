@@ -7,6 +7,7 @@ import rip.ysm.compat.oculus.OculusCompat;
 import rip.ysm.compat.touhoulittlemaid.TouhouLittleMaidCompat;
 import com.elfmcys.yesstevemodel.client.animation.AnimationTracker;
 import com.elfmcys.yesstevemodel.client.entity.LivingAnimatable;
+import com.elfmcys.yesstevemodel.mixin.client.EntityRidingAccessor;
 import com.elfmcys.yesstevemodel.geckolib3.core.AnimatableEntity;
 import com.elfmcys.yesstevemodel.geckolib3.core.processor.IBone;
 import com.elfmcys.yesstevemodel.geckolib3.geo.GeoReplacedEntityRenderer;
@@ -28,6 +29,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Blocks;
 import org.joml.Quaternionf;
 
@@ -37,11 +39,15 @@ import com.mojang.math.Axis;
 
 public final class ModelPreviewRenderer {
 
+    public static final float FRONT_FACING_YAW = 180.0f;
+
     private static boolean isPreviewMode = false;
 
     private static boolean isExtraPlayerMode = false;
 
     private static boolean isFirstPersonMode = false;
+
+    private static boolean inventoryPreviewFrontFacing = false;
 
     public static void setPreviewMode(boolean previewMode) {
         isPreviewMode = previewMode;
@@ -72,6 +78,14 @@ public final class ModelPreviewRenderer {
         return isFirstPersonMode && !FirstPersonCompat.isFirstPersonActive();
     }
 
+    public static void setInventoryPreviewFrontFacing(boolean frontFacing) {
+        inventoryPreviewFrontFacing = frontFacing;
+    }
+
+    public static boolean isInventoryPreviewFrontFacing() {
+        return inventoryPreviewFrontFacing;
+    }
+
     public static void renderVehicleModel(Entity entity, PoseStack poseStack, float partialTick) {
         Entity vehicle = entity.getVehicle();
         if (vehicle != null) {
@@ -86,7 +100,8 @@ public final class ModelPreviewRenderer {
                 poseStack.mulPose(Axis.YP.rotationDegrees(180.0f - bodyRotation));
                 RenderUtils.prepMatrixForLocator(poseStack, list);
                 poseStack.mulPose(Axis.YN.rotationDegrees(180.0f - bodyRotation));
-                double myRidingOffset = (-vehicle.getPassengersRidingOffset()) - entity.getMyRidingOffset();
+                Vec3 passengerAttachment = ((EntityRidingAccessor) vehicle).invokeGetPassengerAttachmentPoint(entity, entity.getDimensions(entity.getPose()), 1.0F);
+                double myRidingOffset = -passengerAttachment.y();
                 if (((entity instanceof Player) && PlayerCapability.get(entity).isPresent()) || TouhouLittleMaidCompat.isMaidRideable(entity)) {
                     myRidingOffset -= 0.5d;
                 }
@@ -99,9 +114,9 @@ public final class ModelPreviewRenderer {
     public static void renderEntityPreview(float x, float y, float scale, float pitch, float yaw, float partialTick, AnimatableEntity animatableEntity, GeoReplacedEntityRenderer renderer, boolean renderGround) {
         setPreviewMode(true);
         LivingEntity livingEntity = (LivingEntity) animatableEntity.getEntity();
-        PoseStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushPose();
-        modelViewStack.translate(x, y, 1250.0d);
+        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+        modelViewStack.translate(x, y, 1250.0f);
         modelViewStack.scale(1.0f, 1.0f, -1.0f);
         RenderSystem.applyModelViewMatrix();
 
@@ -124,14 +139,15 @@ public final class ModelPreviewRenderer {
         float oldHeadRotO = livingEntity.yHeadRotO;
         float oldHeadRot = livingEntity.yHeadRot;
         Pose oldPose = livingEntity.getPose();
-        livingEntity.yBodyRot = -yaw;
-        livingEntity.yBodyRotO = -yaw;
-        livingEntity.setYRot(180.0f);
-        livingEntity.yRotO = 180.0f;
+        float previewYaw = -yaw;
+        livingEntity.yBodyRot = previewYaw;
+        livingEntity.yBodyRotO = previewYaw;
+        livingEntity.setYRot(previewYaw);
+        livingEntity.yRotO = previewYaw;
         livingEntity.setXRot(0.0f);
         livingEntity.xRotO = 0.0f;
-        livingEntity.yHeadRot = -yaw;
-        livingEntity.yHeadRotO = -yaw;
+        livingEntity.yHeadRot = previewYaw;
+        livingEntity.yHeadRotO = previewYaw;
 
         Lighting.setupForEntityInInventory();
         EntityRenderDispatcher entityRenderDispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
@@ -192,7 +208,7 @@ public final class ModelPreviewRenderer {
         livingEntity.yHeadRot = oldHeadRot;
         livingEntity.setPose(oldPose);
 
-        modelViewStack.popPose();
+        modelViewStack.popMatrix();
         RenderSystem.applyModelViewMatrix();
         Lighting.setupFor3DItems();
         setPreviewMode(false);
@@ -231,7 +247,7 @@ public final class ModelPreviewRenderer {
         }
 
         poseStack.translate(-1.0f, 1.0f, 1.0f);
-        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(Blocks.GRASS.defaultBlockState(), poseStack, bufferSource, 15728880, OverlayTexture.NO_OVERLAY);
+        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(Blocks.SHORT_GRASS.defaultBlockState(), poseStack, bufferSource, 15728880, OverlayTexture.NO_OVERLAY);
         poseStack.translate(0.0f, 0.0f, 1.0f);
         Minecraft.getInstance().getBlockRenderer().renderSingleBlock(Blocks.RED_TULIP.defaultBlockState(), poseStack, bufferSource, 15728880, OverlayTexture.NO_OVERLAY);
     }
@@ -252,7 +268,8 @@ public final class ModelPreviewRenderer {
     private static void renderVehicleEntity(float yaw, Entity riderEntity, PoseStack poseStack, EntityRenderDispatcher entityRenderDispatcher, MultiBufferSource.BufferSource bufferSource, Entity vehicleEntity, float partialTick) {
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(yaw));
-        entityRenderDispatcher.render(vehicleEntity, 0.0d, (-vehicleEntity.getPassengersRidingOffset()) - riderEntity.getMyRidingOffset(), 0.0d, 0.0f, partialTick, poseStack, bufferSource, 15728880);
+        Vec3 passengerAttachment = ((EntityRidingAccessor) vehicleEntity).invokeGetPassengerAttachmentPoint(riderEntity, riderEntity.getDimensions(riderEntity.getPose()), 1.0F);
+        entityRenderDispatcher.render(vehicleEntity, 0.0d, passengerAttachment.y(), 0.0d, 0.0f, partialTick, poseStack, bufferSource, 15728880);
         poseStack.popPose();
     }
 
@@ -261,9 +278,9 @@ public final class ModelPreviewRenderer {
         ItemStack[] savedEquipment;
         setPreviewMode(true);
         LivingEntity livingEntity = animatable.getEntity();
-        PoseStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushPose();
-        modelViewStack.translate(x, y, 1050.0d);
+        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+        modelViewStack.translate(x, y, 1050.0f);
         modelViewStack.scale(1.0f, 1.0f, -1.0f);
         RenderSystem.applyModelViewMatrix();
 
@@ -287,6 +304,7 @@ public final class ModelPreviewRenderer {
             savedEquipment = new ItemStack[EquipmentSlot.values().length];
             int slotIndex = 0;
             for (EquipmentSlot equipmentSlot : EquipmentSlot.values()) {
+                savedEquipment[slotIndex] = player.getItemBySlot(equipmentSlot).copy();
                 if (equipmentSlot == EquipmentSlot.MAINHAND) {
                     player.getInventory().items.set(player.getInventory().selected, ItemStack.EMPTY);
                 } else if (equipmentSlot == EquipmentSlot.OFFHAND) {
@@ -297,14 +315,13 @@ public final class ModelPreviewRenderer {
                         armorList.set(equipmentSlot.getIndex(), ItemStack.EMPTY);
                     }
                 }
-                savedEquipment[slotIndex] = player.getItemBySlot(equipmentSlot);
                 slotIndex++;
             }
         } else {
             savedEquipment = null;
         }
 
-        float previewYaw = disablePreviewRotation ? 180.0f : 200.0f;
+        float previewYaw = FRONT_FACING_YAW;
         livingEntity.yBodyRot = previewYaw;
         livingEntity.yBodyRotO = previewYaw;
         livingEntity.setYRot(previewYaw);
@@ -329,51 +346,56 @@ public final class ModelPreviewRenderer {
         entityRenderDispatcher.setRenderShadow(false);
         MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
 
-        RenderSystem.runAsFancy(() -> {
-            renderer.renderEntity(animatable, 0.0f, partialTick, poseStack, bufferSource, 15728880);
-        });
-
-        bufferSource.endBatch();
-        entityRenderDispatcher.setRenderShadow(true);
-        livingEntity.yBodyRot = oldBodyRot;
-        livingEntity.yBodyRotO = oldBodyRotO;
-        livingEntity.setYRot(oldYRot);
-        livingEntity.yRotO = oldYRotO;
-        livingEntity.setXRot(oldXRot);
-        livingEntity.xRotO = oldXRotO;
-        livingEntity.yHeadRotO = oldHeadRotO;
-        livingEntity.yHeadRot = oldHeadRot;
-        if (savedEquipment != null) {
-            Player player = (Player) livingEntity;
-            int slotIndex = 0;
-            for (EquipmentSlot equipmentSlot : EquipmentSlot.values()) {
-                ItemStack itemStack = savedEquipment[slotIndex];
-                if (equipmentSlot == EquipmentSlot.MAINHAND) {
-                    player.getInventory().items.set(player.getInventory().selected, itemStack);
-                } else if (equipmentSlot == EquipmentSlot.OFFHAND) {
-                    player.getInventory().offhand.set(0, itemStack);
-                } else {
-                    NonNullList<ItemStack> armorList = player.getInventory().armor;
-                    if (armorList.size() > equipmentSlot.getIndex()) {
-                        armorList.set(equipmentSlot.getIndex(), itemStack);
-                    }
-                }
-                slotIndex++;
+        try {
+            RenderSystem.runAsFancy(() -> {
+                renderer.renderEntity(animatable, 0.0f, partialTick, poseStack, bufferSource, 15728880);
+            });
+        } finally {
+            try {
+                bufferSource.endBatch();
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
             }
+            entityRenderDispatcher.setRenderShadow(true);
+            livingEntity.yBodyRot = oldBodyRot;
+            livingEntity.yBodyRotO = oldBodyRotO;
+            livingEntity.setYRot(oldYRot);
+            livingEntity.yRotO = oldYRotO;
+            livingEntity.setXRot(oldXRot);
+            livingEntity.xRotO = oldXRotO;
+            livingEntity.yHeadRotO = oldHeadRotO;
+            livingEntity.yHeadRot = oldHeadRot;
+            if (savedEquipment != null) {
+                Player player = (Player) livingEntity;
+                int slotIndex = 0;
+                for (EquipmentSlot equipmentSlot : EquipmentSlot.values()) {
+                    ItemStack itemStack = savedEquipment[slotIndex];
+                    if (equipmentSlot == EquipmentSlot.MAINHAND) {
+                        player.getInventory().items.set(player.getInventory().selected, itemStack);
+                    } else if (equipmentSlot == EquipmentSlot.OFFHAND) {
+                        player.getInventory().offhand.set(0, itemStack);
+                    } else {
+                        NonNullList<ItemStack> armorList = player.getInventory().armor;
+                        if (armorList.size() > equipmentSlot.getIndex()) {
+                            armorList.set(equipmentSlot.getIndex(), itemStack);
+                        }
+                    }
+                    slotIndex++;
+                }
+            }
+            modelViewStack.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            Lighting.setupFor3DItems();
+            setPreviewMode(false);
         }
-
-        modelViewStack.popPose();
-        RenderSystem.applyModelViewMatrix();
-        Lighting.setupFor3DItems();
-        setPreviewMode(false);
     }
 
     // 纸娃娃
     public static void renderPlayerOverlay(GuiGraphics guiGraphics, LocalPlayer localPlayer, double x, double y, float scale, float yawOffset, int zDepth, float partialTick) {
         setExtraPlayerMode(true);
-        PoseStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushPose();
-        modelViewStack.translate(x + (scale * 0.5d), y + (scale * 2.0f), 0.0d);
+        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+        modelViewStack.translate((float) (x + (scale * 0.5f)), (float) (y + (scale * 2.0f)), 0.0f);
         modelViewStack.scale(1.0f, 1.0f, -1.0f);
         RenderSystem.applyModelViewMatrix();
 
@@ -381,8 +403,9 @@ public final class ModelPreviewRenderer {
         guiGraphics.pose().translate(0.0f, 0.0f, -zDepth);
         guiGraphics.pose().scale(scale, scale, scale);
 
+        float previewYaw = FRONT_FACING_YAW;
         Quaternionf rotationZ = Axis.ZP.rotationDegrees(180.1f);
-        Quaternionf rotationY = Axis.YP.rotationDegrees((Mth.lerp(partialTick, localPlayer.yBodyRotO, localPlayer.yBodyRot) + yawOffset) - 180.0f);
+        Quaternionf rotationY = Axis.YP.rotationDegrees(yawOffset - FRONT_FACING_YAW + 180.0f);
         rotationZ.mul(rotationY);
         guiGraphics.pose().mulPose(rotationZ);
 
@@ -392,14 +415,39 @@ public final class ModelPreviewRenderer {
         entityRenderDispatcher.overrideCameraOrientation(rotationY);
         entityRenderDispatcher.setRenderShadow(false);
 
+        float oldBodyRot = localPlayer.yBodyRot;
+        float oldBodyRotO = localPlayer.yBodyRotO;
+        float oldYRot = localPlayer.getYRot();
+        float oldYRotO = localPlayer.yRotO;
+        float oldXRot = localPlayer.getXRot();
+        float oldXRotO = localPlayer.xRotO;
+        float oldHeadRot = localPlayer.yHeadRot;
+        float oldHeadRotO = localPlayer.yHeadRotO;
+        localPlayer.yBodyRot = previewYaw;
+        localPlayer.yBodyRotO = previewYaw;
+        localPlayer.setYRot(previewYaw);
+        localPlayer.yRotO = previewYaw;
+        localPlayer.yHeadRot = previewYaw;
+        localPlayer.yHeadRotO = previewYaw;
+        localPlayer.setXRot(0.0f);
+        localPlayer.xRotO = 0.0f;
+
         RenderSystem.runAsFancy(() -> {
-            entityRenderDispatcher.render(localPlayer, 0.0d, 0.0d, 0.0d, 0.0f, partialTick, guiGraphics.pose(), guiGraphics.bufferSource(), 15728880);
+            entityRenderDispatcher.render(localPlayer, 0.0d, 0.0d, 0.0d, previewYaw, partialTick, guiGraphics.pose(), guiGraphics.bufferSource(), 15728880);
         });
 
         guiGraphics.flush();
         entityRenderDispatcher.setRenderShadow(true);
+        localPlayer.yBodyRot = oldBodyRot;
+        localPlayer.yBodyRotO = oldBodyRotO;
+        localPlayer.setYRot(oldYRot);
+        localPlayer.yRotO = oldYRotO;
+        localPlayer.setXRot(oldXRot);
+        localPlayer.xRotO = oldXRotO;
+        localPlayer.yHeadRot = oldHeadRot;
+        localPlayer.yHeadRotO = oldHeadRotO;
         guiGraphics.pose().popPose();
-        modelViewStack.popPose();
+        modelViewStack.popMatrix();
         RenderSystem.applyModelViewMatrix();
         Lighting.setupFor3DItems();
         setExtraPlayerMode(false);

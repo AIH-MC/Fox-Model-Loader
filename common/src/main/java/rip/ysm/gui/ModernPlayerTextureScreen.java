@@ -13,6 +13,7 @@ import com.elfmcys.yesstevemodel.util.data.OrderedStringMap;
 import com.mojang.blaze3d.systems.RenderSystem;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.renderer.texture.AbstractTexture;
@@ -34,8 +35,10 @@ import java.util.Map;
 
 public class ModernPlayerTextureScreen extends OptionScreen {
 
-    private static final ResourceLocation ICON_TEXTURE = new ResourceLocation(YesSteveModel.MOD_ID, "texture/icon.png");
+    private static final ResourceLocation ICON_TEXTURE = ResourceLocation.fromNamespaceAndPath(YesSteveModel.MOD_ID, "texture/icon.png");
     private static final List<String> CATEGORY_ORDER = List.of("_textures", "main", "extra", "arm", "fp_arm", "tac", "carryon", "parcool", "swem", "slashblade", "tlm", "immersive_melodies", "irons_spell_books", "arrow");
+    private static final String HIDDEN_PREFIX = "——";
+    private static final String LEGACY_HIDDEN_PREFIX = "鈥斺€?";
 
     public final ModelAssembly renderContext;
     public final String modelId;
@@ -48,7 +51,7 @@ public class ModernPlayerTextureScreen extends OptionScreen {
 
     private int previewLeft, previewTop, previewRight, previewBottom;
 
-    private float yaw = 165.0f;
+    private float yaw = ModelPreviewRenderer.FRONT_FACING_YAW;
     private float pitch = -5.0f;
     private float zoom = 80.0f;
     private float offsetX = 0.0f;
@@ -97,15 +100,21 @@ public class ModernPlayerTextureScreen extends OptionScreen {
             tg.add(new TextureGrid(this));
             groups.add(tg);
         }
-        Object2ReferenceMap<String, Animation> mainAnims = renderContext.getAnimationBundle().getMainAnimations();
         Map<String, List<String>> buckets = new LinkedHashMap<>();
-        for (Map.Entry<String, Animation> e : mainAnims.entrySet()) {
-            String name = e.getKey();
-            if (name.startsWith("——")) continue;
-            String key = e.getValue().sourceKey;
-            if (key == null) key = "misc";
-            buckets.computeIfAbsent(key, k -> new ArrayList<>()).add(name);
-        }
+        collectAnimations(buckets, renderContext.getAnimationBundle().getMainAnimations(), "main");
+        collectAnimations(buckets, renderContext.getAnimationBundle().getArmAnimations(), "arm");
+        renderContext.getModelData().getModelProperties().getExtraAnimation().forEach((name, label) -> {
+            if (renderContext.getAnimationBundle().getMainAnimations().containsKey(name)) {
+                addAnimationName(buckets, "extra", name);
+            }
+        });
+        renderContext.getModelData().getModelProperties().getExtraAnimationClassify().forEach((cat, animations) -> {
+            animations.forEach((name, label) -> {
+                if (renderContext.getAnimationBundle().getMainAnimations().containsKey(name)) {
+                    addAnimationName(buckets, cat, name);
+                }
+            });
+        });
         List<String> sortedCats = new ArrayList<>(buckets.keySet());
         sortedCats.sort((a, b) -> {
             int ia = CATEGORY_ORDER.indexOf(a);
@@ -122,6 +131,25 @@ public class ModernPlayerTextureScreen extends OptionScreen {
             }
             groups.add(g);
         }
+    }
+
+    private void collectAnimations(Map<String, List<String>> buckets, Object2ReferenceMap<String, Animation> animations, String fallbackCategory) {
+        for (Map.Entry<String, Animation> e : animations.entrySet()) {
+            String name = e.getKey();
+            if (isHiddenAnimation(name)) continue;
+            String key = e.getValue().sourceKey;
+            if (key == null || key.isBlank()) key = fallbackCategory;
+            addAnimationName(buckets, key, name);
+        }
+    }
+
+    private static void addAnimationName(Map<String, List<String>> buckets, String category, String name) {
+        List<String> names = buckets.computeIfAbsent(category, k -> new ArrayList<>());
+        if (!names.contains(name)) names.add(name);
+    }
+
+    private static boolean isHiddenAnimation(String name) {
+        return name.startsWith(HIDDEN_PREFIX) || name.startsWith(LEGACY_HIDDEN_PREFIX);
     }
 
     @Override
@@ -195,7 +223,7 @@ public class ModernPlayerTextureScreen extends OptionScreen {
         offsetX = 0.0f;
         offsetY = -60.0f;
         zoom = 80.0f;
-        yaw = 165.0f;
+        yaw = ModelPreviewRenderer.FRONT_FACING_YAW;
         pitch = -5.0f;
     }
 
@@ -326,7 +354,7 @@ public class ModernPlayerTextureScreen extends OptionScreen {
             modelHolder.initModelWithTexture(modelId, cap.getCurrentTextureName());
             float cx = (previewLeft + previewRight) / 2.0f + offsetX;
             float cy = previewTop + (previewBottom - previewTop) * 0.65f + offsetY;
-            ModelPreviewRenderer.renderEntityPreview(cx, cy, zoom, pitch, yaw, this.minecraft.getFrameTime(), modelHolder, RendererManager.getPlayerRenderer(), showGround);
+            ModelPreviewRenderer.renderEntityPreview(cx, cy, zoom, pitch, yaw, partialTick, modelHolder, RendererManager.getPlayerRenderer(), showGround);
         });
         RenderSystem.disableScissor();
     }
@@ -375,12 +403,12 @@ public class ModernPlayerTextureScreen extends OptionScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (isInPreview(mouseX, mouseY)) {
-            zoom = Mth.clamp((float) (zoom * (1.0 + delta * 0.1)), 18.0f, 360.0f);
+            zoom = Mth.clamp((float) (zoom * (1.0 + scrollY * 0.1)), 18.0f, 360.0f);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     private boolean isInPreview(double mouseX, double mouseY) {

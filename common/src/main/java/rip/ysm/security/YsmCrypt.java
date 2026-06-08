@@ -459,6 +459,14 @@ public class YsmCrypt {
     }
 
     public static byte[] read(byte[] cacheFileData, byte[] clientKey) throws Exception {
+        return read(cacheFileData, clientKey, false);
+    }
+
+    public static byte[] readStrict(byte[] cacheFileData, byte[] clientKey) throws Exception {
+        return read(cacheFileData, clientKey, true);
+    }
+
+    private static byte[] read(byte[] cacheFileData, byte[] clientKey, boolean strictZstd) throws Exception {
         try (YSMByteBuf buf = new YSMByteBuf(Unpooled.wrappedBuffer(cacheFileData))) {
             buf.readVarInt();
             buf.readVarInt();
@@ -485,6 +493,9 @@ public class YsmCrypt {
             int n = ((plainText[0] & 0xFF) | ((plainText[1] & 0xFF) << 8)) & 0x3FF;
             int zstdOffset = 2 + n;
 
+            if (strictZstd) {
+                return YsmZstd.decompressStrict(plainText, zstdOffset, plainText.length - zstdOffset);
+            }
             return YsmZstd.decompress(plainText, zstdOffset, plainText.length - zstdOffset);
         }
     }

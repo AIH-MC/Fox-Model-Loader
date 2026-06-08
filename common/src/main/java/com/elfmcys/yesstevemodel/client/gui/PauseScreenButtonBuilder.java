@@ -3,7 +3,6 @@ package com.elfmcys.yesstevemodel.client.gui;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
-import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
@@ -23,11 +22,7 @@ public class PauseScreenButtonBuilder {
         if (isServerConnected()) {
             Minecraft minecraft = Minecraft.getInstance();
             Button buttonBuild = Button.builder(Component.translatable("gui.yes_steve_model.skin"), button -> {
-                if (GeneralConfig.DISCLAIMER_SHOW.get()) {
-                    minecraft.setScreen(new DisclaimerScreen());
-                } else {
-                    minecraft.setScreen(new PlayerModelScreen());
-                }
+                minecraft.setScreen(new PlayerModelScreen());
             }).bounds((pauseScreen.width / 2) - 69, pauseScreen.height - 35, 138, 30).build();
             buttonBuild.setTooltip(Tooltip.create(Component.translatable("key.yes_steve_model.player_model.desc")));
             Button buttonBuild2 = Button.builder(Component.literal("🔧"), button2 -> {

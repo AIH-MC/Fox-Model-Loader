@@ -98,7 +98,7 @@ public class PlayerTextureScreen extends Screen {
         this.offsetX = 0.0f;
         this.offsetY = -60.0f;
         this.zoom = 80.0f;
-        this.yaw = 165.0f;
+        this.yaw = ModelPreviewRenderer.FRONT_FACING_YAW;
         this.pitch = -5.0f;
         this.showGround = true;
         this.modelHolder = new PlayerPreviewEntity();
@@ -148,7 +148,7 @@ public class PlayerTextureScreen extends Screen {
             this.offsetX = 0.0f;
             this.offsetY = -60.0f;
             this.zoom = 80.0f;
-            this.yaw = 165.0f;
+            this.yaw = ModelPreviewRenderer.FRONT_FACING_YAW;
             this.pitch = -5.0f;
         }).setTooltipText("gui.yes_steve_model.model.reset"));
         addRenderableWidget(new IconButton(this.guiLeft + 245, this.guiTop + 2, 16, 16, 64, 0, button4 -> {
@@ -209,7 +209,7 @@ public class PlayerTextureScreen extends Screen {
         if (Minecraft.getInstance().player == null) {
             return;
         }
-        renderBackground(guiGraphics);
+        renderTransparentBackground(guiGraphics);
         guiGraphics.fillGradient(this.guiLeft, this.guiTop + 22, this.guiLeft + 90, this.guiTop + 235, -14540254, -14540254);
         guiGraphics.fillGradient(this.guiLeft + 93, this.guiTop, this.guiLeft + 299, this.guiTop + 235, -14540254, -14540254);
         guiGraphics.fillGradient(this.guiLeft + 302, this.guiTop, this.guiLeft + 420, this.guiTop + 235, -14540254, -14540254);
@@ -221,7 +221,7 @@ public class PlayerTextureScreen extends Screen {
         if (!this.modelHolder.getAnimationStateMachine().isCurrentAnimation(this.currentAnimation)) {
             this.modelHolder.getAnimationStateMachine().setCurrentAnimation(this.currentAnimation);
         }
-        renderTexturePreview(guiGraphics, scissorX, height, scissorWidth, scissorHeight, this.minecraft.getFrameTime());
+        renderTexturePreview(guiGraphics, scissorX, height, scissorWidth, scissorHeight, partialTick);
         String str = String.format("%d/%d", this.textureCurrentPage + 1, this.textureMaxPage + 1);
         Font font = this.font;
         int iWidth = this.guiLeft + 302 + ((118 - this.font.width(str)) / 2);
@@ -279,7 +279,7 @@ public class PlayerTextureScreen extends Screen {
                 return scrollTexturePage(delta);
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, delta, delta);
     }
 
     private boolean scrollTexturePage(double delta) {

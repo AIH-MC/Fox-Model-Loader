@@ -1,5 +1,8 @@
 package com.elfmcys.yesstevemodel.client.texture;
 
+import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.config.GeneralConfig;
+import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
 import rip.ysm.compat.oculus.ShadersTextureType;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.platform.TextureUtil;
@@ -15,7 +18,8 @@ import java.io.IOException;
 import java.util.Map;
 
 public class OuterFileTexture extends AbstractTexture implements ITextureMap {
-    private final byte[] data;
+    private byte[] data;
+    private boolean uploaded;
 
     private Map<ShadersTextureType, OuterFileTexture> suffixTextures = Reference2ReferenceMaps.emptyMap();
 
@@ -33,14 +37,27 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
     }
 
     public void doLoad() {
-        try {
-            NativeImage imageIn = NativeImage.read(new ByteArrayInputStream(data));
+        byte[] textureBytes = data;
+        if (textureBytes == null) {
+            if (!uploaded) {
+                YesSteveModel.LOGGER.warn("[YSM] Texture bytes are unavailable before upload.");
+            }
+            return;
+        }
+        ModelMemoryProfiler.logBytes("texture-decode-start", null, textureBytes);
+        try (NativeImage imageIn = NativeImage.read(new ByteArrayInputStream(textureBytes))) {
             int width = imageIn.getWidth();
             int height = imageIn.getHeight();
             TextureUtil.prepareImage(this.getId(), 0, width, height);
             imageIn.upload(0, 0, 0, 0, 0, width, height, false, false, false, true);
+            uploaded = true;
+            ModelMemoryProfiler.log("texture-uploaded", null);
+            if (GeneralConfig.safeGet(GeneralConfig.RELEASE_TEXTURE_BYTES_AFTER_UPLOAD, false)) {
+                data = null;
+                ModelMemoryProfiler.log("texture-bytes-released", null);
+            }
         } catch (IOException e) {
-            e.printStackTrace();
+            YesSteveModel.LOGGER.error("[YSM] Failed to upload outer file texture", e);
         }
     }
 

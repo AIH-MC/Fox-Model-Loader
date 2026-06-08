@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.network.message;
 
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
+import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import net.minecraft.network.FriendlyByteBuf;
 import rip.ysm.api.network.PacketContext;
@@ -31,6 +32,8 @@ public class S2CVersionCheckPacket {
 
     public static void encode(S2CVersionCheckPacket message, FriendlyByteBuf buf) {
         buf.writeUtf(message.version);
+        buf.writeUtf("open_ysm:v1");
+        buf.writeBoolean(ServerModelManager.isModelUploadAllowed());
     }
 
     public static void handle(S2CVersionCheckPacket message, PacketContext ctx) {

@@ -1,17 +1,14 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
+import com.elfmcys.yesstevemodel.client.event.AnimationLockEvent;
+import com.elfmcys.yesstevemodel.client.gui.custom.ExtraAnimationButtons;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
-import com.elfmcys.yesstevemodel.client.event.AnimationLockEvent;
+import com.elfmcys.yesstevemodel.resource.models.ModelProperties;
 import com.elfmcys.yesstevemodel.client.gui.button.AnimationSlider;
 import com.elfmcys.yesstevemodel.client.gui.button.ConfigCheckBox;
 import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
 import com.elfmcys.yesstevemodel.client.gui.button.FlatIconButton;
-import com.elfmcys.yesstevemodel.client.gui.custom.AbstractConfig;
-import com.elfmcys.yesstevemodel.client.gui.custom.ExtraAnimationButtons;
-import com.elfmcys.yesstevemodel.client.gui.custom.configs.CheckboxConfig;
-import com.elfmcys.yesstevemodel.client.gui.custom.configs.RadioConfig;
-import com.elfmcys.yesstevemodel.client.gui.custom.configs.RangeConfig;
 import com.elfmcys.yesstevemodel.client.input.AnimationRouletteKey;
 import com.elfmcys.yesstevemodel.client.input.ExtraAnimationKey;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
@@ -20,14 +17,19 @@ import com.elfmcys.yesstevemodel.config.ServerConfig;
 import com.elfmcys.yesstevemodel.geckolib3.core.AnimatableEntity;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.util.StringPool;
 import com.elfmcys.yesstevemodel.geckolib3.resource.GeckoLibCache;
+import com.elfmcys.yesstevemodel.client.gui.custom.AbstractConfig;
+import com.elfmcys.yesstevemodel.client.gui.custom.configs.CheckboxConfig;
+import com.elfmcys.yesstevemodel.client.gui.custom.configs.RadioConfig;
+import com.elfmcys.yesstevemodel.client.gui.custom.configs.RangeConfig;
 import com.elfmcys.yesstevemodel.mixin.client.ScreenAccessor;
 import com.elfmcys.yesstevemodel.molang.parser.ParseException;
+import rip.ysm.api.client.KeyMappingFactory;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.network.message.C2SPlayAnimationPacket;
 import com.elfmcys.yesstevemodel.network.message.C2SRequestExecuteMolangPacket;
-import com.elfmcys.yesstevemodel.resource.models.ModelProperties;
 import com.elfmcys.yesstevemodel.util.data.OrderedStringMap;
 import com.google.common.collect.Lists;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import net.minecraft.ChatFormatting;
@@ -39,6 +41,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
+import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
@@ -56,7 +59,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
-import rip.ysm.api.client.KeyMappingFactory;
+
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -72,6 +75,8 @@ public class AnimationRouletteScreen extends Screen {
     private static final String CONFIG_DESC_FORMAT = "properties.extra_animation_buttons.%s.config_forms.%d.description";
 
     private static final String CONFIG_LABEL_FORMAT = "properties.extra_animation_buttons.%s.config_forms.%d.labels.%d";
+
+    private static final int ITEMS_PER_PAGE = 8;
 
     private static final LinkedList<Pair<String, Integer>> navigationStack = Lists.newLinkedList();
 
@@ -469,11 +474,7 @@ public class AnimationRouletteScreen extends Screen {
             if (str2.startsWith(SUBMENU_PREFIX)) {
                 String strSubstring = str2.substring(SUBMENU_PREFIX.length());
                 if (this.renderGroups.containsKey(strSubstring)) {
-                    if (GeneralConfig.ROULETTE_SETTINGS_MODE.get() == GeneralConfig.RouletteSettingsMode.CLASSIC) {
-                        showConfigGroup(strSubstring);
-                    } else {
-                        Minecraft.getInstance().setScreen(new rip.ysm.gui.ModelSettingsScreen(this.renderContext, this.animatableModel, this, strSubstring));
-                    }
+                    showConfigGroup(strSubstring);
                 }
             }
         }
@@ -639,8 +640,7 @@ public class AnimationRouletteScreen extends Screen {
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder builder = tesselator.getBuilder();
-        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder builder = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         Matrix4f matrix4fPose = poseStack.last().pose();
         float pointerAngle = (float) Mth.atan2(mouseY - this.centerY, mouseX - this.centerX);
         if (pointerAngle < 0.0f) {
@@ -672,7 +672,7 @@ public class AnimationRouletteScreen extends Screen {
         if (!hoveredConfig) {
             this.hoveredConfigIndex = -1;
         }
-        tesselator.end();
+        BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.disableBlend();
     }
 
@@ -700,9 +700,9 @@ public class AnimationRouletteScreen extends Screen {
         float red = ((color >> 16) & 255) / 255.0f;
         float green = ((color >> 8) & 255) / 255.0f;
         float blue = (color & 255) / 255.0f;
-        bufferBuilder.vertex(matrix4f, this.centerX + (outerRadius * Mth.cos(startAngle)), this.centerY + (outerRadius * Mth.sin(startAngle)), 0.0f).color(red, green, blue, alpha).endVertex();
-        bufferBuilder.vertex(matrix4f, this.centerX + (innerRadius * Mth.cos(startAngle)), this.centerY + (innerRadius * Mth.sin(startAngle)), 0.0f).color(red, green, blue, alpha).endVertex();
-        bufferBuilder.vertex(matrix4f, this.centerX + (innerRadius * Mth.cos(endAngle)), this.centerY + (innerRadius * Mth.sin(endAngle)), 0.0f).color(red, green, blue, alpha).endVertex();
-        bufferBuilder.vertex(matrix4f, this.centerX + (outerRadius * Mth.cos(endAngle)), this.centerY + (outerRadius * Mth.sin(endAngle)), 0.0f).color(red, green, blue, alpha).endVertex();
+        bufferBuilder.addVertex(matrix4f, this.centerX + (outerRadius * Mth.cos(startAngle)), this.centerY + (outerRadius * Mth.sin(startAngle)), 0.0f).setColor(color);
+        bufferBuilder.addVertex(matrix4f, this.centerX + (innerRadius * Mth.cos(startAngle)), this.centerY + (innerRadius * Mth.sin(startAngle)), 0.0f).setColor(color);
+        bufferBuilder.addVertex(matrix4f, this.centerX + (innerRadius * Mth.cos(endAngle)), this.centerY + (innerRadius * Mth.sin(endAngle)), 0.0f).setColor(color);
+        bufferBuilder.addVertex(matrix4f, this.centerX + (outerRadius * Mth.cos(endAngle)), this.centerY + (outerRadius * Mth.sin(endAngle)), 0.0f).setColor(color);
     }
 }

@@ -3,8 +3,11 @@ package com.elfmcys.yesstevemodel.network.message;
 import com.elfmcys.yesstevemodel.capability.AuthModelsCapability;
 import com.elfmcys.yesstevemodel.capability.ModelInfoCapability;
 import com.elfmcys.yesstevemodel.capability.StarModelsCapability;
+import com.elfmcys.yesstevemodel.event.CapabilityEvent;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import rip.ysm.api.network.PacketContext;
@@ -32,11 +35,23 @@ public class C2SVersionCheckPacket {
     public static void handle(C2SVersionCheckPacket message, PacketContext ctx) {
         ServerPlayer sender = ctx.getSender();
         if (sender != null && NetworkHandler.setChannelVersion(ctx.getConnection(), message.version)) {
+            NetworkOnlineDebugLog.info("C2SVersionCheck from {} ver={}", sender.getName().getString(), message.version);
+            AuthModelsCapability.get(sender).ifPresent(cap -> {
+                for (String modelId : ServerModelManager.getAuthModels()) {
+                    cap.addModel(modelId);
+                }
+            });
+            PlayerModelSelectionStore.restore(sender);
             ServerModelManager.validatePlayerModel(sender);
             ModelInfoCapability.get(sender).ifPresent(cap -> {
+                NetworkOnlineDebugLog.info("After validate: {} modelId={} texture={} dirty={}",
+                        sender.getName().getString(), cap.getModelId(), cap.getSelectTexture(), cap.isDirty());
                 cap.setMandatory(false);
                 cap.stopAnimation(sender);
             });
+            CapabilityEvent.syncVisiblePlayerModelsTo(sender);
+            NetworkOnlineDebugLog.info("Calling syncPlayerModelToTracking for {}", sender.getName().getString());
+            CapabilityEvent.syncPlayerModelToTracking(sender, false);
             AuthModelsCapability.get(sender).ifPresent(cap -> {
                 NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(cap.getAuthModels()), sender);
             });

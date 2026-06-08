@@ -217,6 +217,10 @@ public class AnimationProcessor<TEntity extends Entity> {
         return renderer != null ? renderer.bone : null;
     }
 
+    public int getBoneCount() {
+        return this.bones.size();
+    }
+
     public void reset() {
         this.boneById.clear();
         this.modelRendererList.clear();

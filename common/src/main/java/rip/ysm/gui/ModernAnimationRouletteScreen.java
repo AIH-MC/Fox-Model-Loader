@@ -35,7 +35,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import rip.ysm.api.client.KeyMappingFactory;
-import rip.ysm.gpu.BlurStack;
 import rip.ysm.gpu.Pie;
 
 import java.util.LinkedList;
@@ -44,9 +43,9 @@ import java.util.Map;
 
 public class ModernAnimationRouletteScreen extends Screen {
 
-    private static final ResourceLocation settingsIcon = new ResourceLocation(YesSteveModel.MOD_ID, "texture/settings.png");
-    private static final ResourceLocation lockIcon = new ResourceLocation(YesSteveModel.MOD_ID, "texture/lock.png");
-    private static final ResourceLocation unlockIcon = new ResourceLocation(YesSteveModel.MOD_ID, "texture/unlock.png");
+    private static final ResourceLocation settingsIcon = ResourceLocation.fromNamespaceAndPath(YesSteveModel.MOD_ID, "texture/settings.png");
+    private static final ResourceLocation lockIcon = ResourceLocation.fromNamespaceAndPath(YesSteveModel.MOD_ID, "texture/lock.png");
+    private static final ResourceLocation unlockIcon = ResourceLocation.fromNamespaceAndPath(YesSteveModel.MOD_ID, "texture/unlock.png");
 
     private static final LinkedList<Pair<String, Integer>> navigationStack = Lists.newLinkedList();
     private static String lastModelId = StringPool.EMPTY;
@@ -111,8 +110,6 @@ public class ModernAnimationRouletteScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        if (GeneralConfig.BLUR_GUI != null && GeneralConfig.BLUR_GUI.get()) collectAndFlushBlur(g);
-
         updateHover(mouseX, mouseY);
         renderSlices(g);
         renderLabels(g);
@@ -121,22 +118,6 @@ public class ModernAnimationRouletteScreen extends Screen {
         renderPathAndPage(g, mouseX, mouseY);
 
         super.render(g, mouseX, mouseY, partialTick);
-    }
-
-    private void collectAndFlushBlur(GuiGraphics g) {
-        float sliceSpan = Pie.tau / 8.0f;
-        for (int i = 0; i < 8; i++) {
-            int absoluteIdx = i + page() * 8;
-            if (absoluteIdx >= currentProperties.size()) continue;
-            float start = sliceStartOffset() + i * sliceSpan + 0.02f;
-            float end = sliceStartOffset() + (i + 1) * sliceSpan - 0.02f;
-            BlurStack.pushBlurPie(centerX, centerY, 22.0f, 100.0f, start, end, 20.0f);
-        }
-        if (pageCount() > 1) {
-            BlurStack.pushBlurPie(centerX - 128.0f, centerY, 0.0f, 16.0f, 0.0f, Pie.tau, 20.0f);
-            BlurStack.pushBlurPie(centerX + 128.0f, centerY, 0.0f, 16.0f, 0.0f, Pie.tau, 20.0f);
-        }
-        BlurStack.flush(g);
     }
 
     private void updateHover(int mouseX, int mouseY) {
@@ -381,8 +362,8 @@ public class ModernAnimationRouletteScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (delta < 0.0) nextPage(); else previousPage();
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (scrollY < 0.0) nextPage(); else previousPage();
         return true;
     }
 

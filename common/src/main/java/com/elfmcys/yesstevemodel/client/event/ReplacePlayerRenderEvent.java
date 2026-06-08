@@ -2,6 +2,7 @@ package com.elfmcys.yesstevemodel.client.event;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
 import com.elfmcys.yesstevemodel.client.renderer.RendererManager;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.util.CameraUtil;
@@ -19,7 +20,7 @@ public class ReplacePlayerRenderEvent {
     private ReplacePlayerRenderEvent() {
     }
 
-    public static boolean onRenderPlayerPre(Player entity, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
+    public static boolean onRenderPlayerPre(Player entity, float entityYaw, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         if (!YesSteveModel.isAvailable()) {
             return false;
         }
@@ -39,7 +40,8 @@ public class ReplacePlayerRenderEvent {
                         || GeneralConfig.DISABLE_EXTERNAL_FP_ANIM.get().booleanValue()
                         || !PlayerAnimatorCompat.isPlayerAnimated(localPlayer)) {
                     cancelled[0] = true;
-                    RendererManager.getPlayerRenderer().render(entity, entity.getYRot(), partialTick, poseStack, bufferSource, packedLight);
+                    float previewYaw = ModelPreviewRenderer.isInventoryPreviewFrontFacing() ? ModelPreviewRenderer.FRONT_FACING_YAW : entityYaw;
+                    RendererManager.getPlayerRenderer().render(entity, previewYaw, partialTick, poseStack, bufferSource, packedLight);
                 }
             }
         });

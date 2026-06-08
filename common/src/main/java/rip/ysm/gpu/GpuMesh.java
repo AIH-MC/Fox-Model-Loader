@@ -1,11 +1,13 @@
 package rip.ysm.gpu;
 
 import com.elfmcys.yesstevemodel.geckolib3.geo.render.built.GeoModel;
+import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
 import com.mojang.blaze3d.platform.GlStateManager;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 public final class GpuMesh {
     public final long pointer;
@@ -40,7 +42,8 @@ public final class GpuMesh {
         this.partMask2Count = pm2c;
         this.partMask3Start = pm3s;
         this.partMask3Count = pm3c;
-        this.perFrameBoneBuffer = MemoryUtil.memAlloc(boneCount * 144);
+        this.perFrameBoneBuffer = MemoryUtil.memAlloc(boneCount * 144).order(ByteOrder.nativeOrder());
+        ModelMemoryProfiler.log("gpu-mesh-created", null);
     }
 
     public int indexOffsetBytes(int renderPartMask) {
@@ -104,5 +107,6 @@ public final class GpuMesh {
             GeoModel.nFreeGpuMesh(pointer);
         }
         MemoryUtil.memFree(perFrameBoneBuffer);
+        ModelMemoryProfiler.log("gpu-mesh-released", null);
     }
 }

@@ -47,7 +47,7 @@ public class ModelSettingsScreen extends OptionScreen {
 
     private int previewLeft, previewTop, previewRight, previewBottom;
 
-    private float yaw = 200.0f;
+    private float yaw = ModelPreviewRenderer.FRONT_FACING_YAW;
 
     private float pitch = 0.0f;
 
@@ -203,9 +203,9 @@ public class ModelSettingsScreen extends OptionScreen {
     private static void renderPlayerForSettings(float x, float y, float scale, float pitch, float yaw, float partialTick, LivingAnimatable animatable, GeoReplacedEntityRenderer renderer) {
         ModelPreviewRenderer.setPreviewMode(true);
         LivingEntity livingEntity = (LivingEntity) animatable.getEntity();
-        PoseStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushPose();
-        modelViewStack.translate(x, y, 1250.0d);
+        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+        modelViewStack.translate(x, y, 1250.0f);
         modelViewStack.scale(1.0f, 1.0f, -1.0f);
         RenderSystem.applyModelViewMatrix();
 
@@ -228,14 +228,15 @@ public class ModelSettingsScreen extends OptionScreen {
         float oldHeadRot = livingEntity.yHeadRot;
         float oldHeadRotO = livingEntity.yHeadRotO;
 
-        livingEntity.yBodyRot = -yaw;
-        livingEntity.yBodyRotO = -yaw;
-        livingEntity.setYRot(180.0f);
-        livingEntity.yRotO = 180.0f;
+        float previewYaw = -yaw;
+        livingEntity.yBodyRot = previewYaw;
+        livingEntity.yBodyRotO = previewYaw;
+        livingEntity.setYRot(previewYaw);
+        livingEntity.yRotO = previewYaw;
         livingEntity.setXRot(0.0f);
         livingEntity.xRotO = 0.0f;
-        livingEntity.yHeadRot = -yaw;
-        livingEntity.yHeadRotO = -yaw;
+        livingEntity.yHeadRot = previewYaw;
+        livingEntity.yHeadRotO = previewYaw;
 
         Lighting.setupForEntityInInventory();
         EntityRenderDispatcher dispatcher = Minecraft.getInstance().getEntityRenderDispatcher();
@@ -257,7 +258,7 @@ public class ModelSettingsScreen extends OptionScreen {
             livingEntity.xRotO = oldXRotO;
             livingEntity.yHeadRot = oldHeadRot;
             livingEntity.yHeadRotO = oldHeadRotO;
-            modelViewStack.popPose();
+            modelViewStack.popMatrix();
             RenderSystem.applyModelViewMatrix();
             Lighting.setupFor3DItems();
             ModelPreviewRenderer.setPreviewMode(false);
@@ -300,12 +301,12 @@ public class ModelSettingsScreen extends OptionScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (isInPreview(mouseX, mouseY)) {
-            zoom = Mth.clamp((float) (zoom * (1.0 + delta * 0.1)), 30.0f, 400.0f);
+            zoom = Mth.clamp((float) (zoom * (1.0 + scrollY * 0.1)), 30.0f, 400.0f);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     private boolean isInPreview(double mouseX, double mouseY) {

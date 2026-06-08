@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "yes_steve_model",
   "version": "${version}",
-  "name": "Yes Steve Model",
+  "name": "Fox Model Loader",
   "description": "",
   "authors": ["Tianjin Accessible Care Innovation Development Co., Ltd."],
   "contact": {
@@ -27,8 +27,9 @@
   ],
   "depends": {
     "fabricloader": ">=0.16.10",
-    "minecraft": "~1.20.1",
-    "java": ">=17"
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
   },
   "suggests": {
     "another-mod": "*"

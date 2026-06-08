@@ -19,6 +19,11 @@ import com.elfmcys.yesstevemodel.resource.YSMBinarySerializer;
 import com.elfmcys.yesstevemodel.resource.YSMClientMapper;
 import com.elfmcys.yesstevemodel.resource.YSMFolderDeserializer;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
+import com.elfmcys.yesstevemodel.util.DigestUtil;
+import com.elfmcys.yesstevemodel.util.ModelIdUtil;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
+import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import com.elfmcys.yesstevemodel.util.YSMNativeHelper;
 import com.elfmcys.yesstevemodel.util.YSMThreadPool;
 import com.google.common.collect.Maps;
@@ -48,6 +53,7 @@ import rip.ysm.security.YsmCrypt;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -65,10 +71,16 @@ import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
 
 public final class ServerModelManager {
+    private static final long UPLOAD_SESSION_TIMEOUT_MS = 120_000L;
+    private static final int UPLOAD_CHUNK_SIZE = 32_000;
+    private static final String EXT_YSM = ".ysm";
+    private static final String EXT_ZIP = ".zip";
+    private static final String EXT_7Z = ".7z";
+
     /**
      * 配置相关文件夹
      */
-    public static final Path FOLDER = Paths.get("config", YesSteveModel.MOD_ID);
+    public static final Path FOLDER = Platform.getConfigFolder().resolve(YesSteveModel.MOD_ID);
 
     /**
      * 自定义模型所放置的文件夹
@@ -103,6 +115,7 @@ public final class ServerModelManager {
 
     private static final Map<UUID, PlayerSyncState> syncStates = new ConcurrentHashMap<>();
     private static final Map<String, ServerPackData> packs = new ConcurrentHashMap<>();
+    private static final Map<Long, ModelUploadState> uploadStates = new ConcurrentHashMap<>();
     private static final SecureRandom theRandom = new SecureRandom();
     public static byte[] serverKey;
     private static volatile boolean initialized = false;
@@ -528,27 +541,17 @@ public final class ServerModelManager {
 
                 @Override
                 public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) {
-                    if (!file.getFileName().toString().endsWith(".ysm")) return FileVisitResult.CONTINUE;
+                    ImportKind importKind = importKindFromFileName(file.getFileName().toString());
+                    if (importKind == ImportKind.UNKNOWN) return FileVisitResult.CONTINUE;
+                    if (importKind == ImportKind.SEVEN_ZIP) {
+                        YesSteveModel.LOGGER.warn("[YSM] Skipping unsupported 7z model archive: {}", file);
+                        return FileVisitResult.CONTINUE;
+                    }
 
                     try {
-                        String modelId = baseDir.relativize(file).toString().replace('\\', '/');
-                        byte[] raw = Files.readAllBytes(file);
-                        int ysmCryptoVersion = YesModelUtils.getYsmCryptoVersion(raw);
-                        if (ysmCryptoVersion == -1) throw new IllegalStateException("Unknown YSM crypto version for file: " + file);
-
-                        RawYsmModel rawModel;
-                        if (ysmCryptoVersion == 1 || ysmCryptoVersion == 2) { // 旧版加密模型
-                            Map<String, byte[]> input = YesModelUtils.input(raw);
-                            try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(input)) {
-                                rawModel = deserializer.deserialize();
-                            }
-                        } else {
-                            byte[] decrypted = YsmCrypt.decryptYsmFile(raw);
-                            try (YSMBinaryDeserializer deserializer = new YSMBinaryDeserializer(decrypted)) {
-                                rawModel = deserializer.deserializeKeepOpen();
-                                deserializer.parseYSMFooter(rawModel); // 只用于gui展示数据
-                            }
-                        }
+                        String modelId = stripImportExtension(baseDir.relativize(file).toString().replace('\\', '/'));
+                        byte[] raw = readModelFileBytes(file);
+                        RawYsmModel rawModel = parseUploadedModel(raw, file.toString(), importKind);
 
                         ServerModelData data = processAndCacheModel(modelId, rawModel, cacheDir, isAuth, validCaches);
                         if (data != null) {
@@ -556,7 +559,7 @@ public final class ServerModelManager {
                             if (isAuth) authIds.add(modelId);
                         }
                     } catch (Exception e) {
-                        YesSteveModel.LOGGER.error("Failed to load binary model at: " + file, e);
+                        YesSteveModel.LOGGER.error("Failed to load imported model at: " + file, e);
                     }
                     return FileVisitResult.CONTINUE;
                 }
@@ -624,6 +627,106 @@ public final class ServerModelManager {
         return new int[]{width, height};
     }
 
+    private static byte[] readModelFileBytes(Path file) throws IOException {
+        try {
+            return Files.readAllBytes(file);
+        } catch (AccessDeniedException accessDenied) {
+            try {
+                File ioFile = file.toFile();
+                if (!ioFile.canRead()) {
+                    ioFile.setReadable(true, false);
+                }
+                try (FileInputStream in = new FileInputStream(ioFile)) {
+                    return in.readAllBytes();
+                }
+            } catch (IOException | SecurityException fallbackError) {
+                accessDenied.addSuppressed(fallbackError);
+                throw accessDenied;
+            }
+        }
+    }
+
+    private static RawYsmModel parseBinaryModel(byte[] raw, String source) throws Exception {
+        int ysmCryptoVersion = YesModelUtils.getYsmCryptoVersion(raw);
+        if (ysmCryptoVersion == -1) {
+            throw new IllegalStateException("Unknown YSM crypto version for file: " + source);
+        }
+
+        if (ysmCryptoVersion == 1 || ysmCryptoVersion == 2) {
+            Map<String, byte[]> input = YesModelUtils.input(raw);
+            try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(input)) {
+                return deserializer.deserialize();
+            }
+        }
+
+        byte[] decrypted = YsmCrypt.decryptYsmFile(raw);
+        try (YSMBinaryDeserializer deserializer = new YSMBinaryDeserializer(decrypted)) {
+            RawYsmModel rawModel = deserializer.deserializeKeepOpen();
+            deserializer.parseYSMFooter(rawModel);
+            return rawModel;
+        }
+    }
+
+    private static RawYsmModel parseArchiveModel(byte[] raw, String source) throws Exception {
+        Path temp = Files.createTempFile("ysm-import-", ".zip");
+        try {
+            Files.write(temp, raw);
+            try (YSMFolderDeserializer deserializer = new YSMFolderDeserializer(temp)) {
+                return deserializer.deserialize();
+            }
+        } finally {
+            try {
+                Files.deleteIfExists(temp);
+            } catch (IOException e) {
+                YesSteveModel.LOGGER.warn("[YSM] Failed to remove temporary model archive {}", temp, e);
+            }
+        }
+    }
+
+    private static RawYsmModel parseUploadedModel(byte[] raw, String source, ImportKind importKind) throws Exception {
+        return switch (importKind) {
+            case YSM -> parseBinaryModel(raw, source);
+            case ZIP -> parseArchiveModel(raw, source);
+            case SEVEN_ZIP -> throw new UnsupportedOperationException("7z import is not supported yet");
+            case UNKNOWN -> throw new IllegalArgumentException("Unsupported model import type for file: " + source);
+        };
+    }
+
+    private static String stripImportExtension(String modelId) {
+        String lower = modelId.toLowerCase(Locale.ROOT);
+        for (String extension : new String[]{EXT_YSM, EXT_ZIP, EXT_7Z}) {
+            if (lower.endsWith(extension)) {
+                return modelId.substring(0, modelId.length() - extension.length());
+            }
+        }
+        return modelId;
+    }
+
+    private static ImportKind importKindFromFileName(String fileName) {
+        if (fileName == null) {
+            return ImportKind.UNKNOWN;
+        }
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(EXT_YSM)) {
+            return ImportKind.YSM;
+        }
+        if (lower.endsWith(EXT_ZIP)) {
+            return ImportKind.ZIP;
+        }
+        if (lower.endsWith(EXT_7Z)) {
+            return ImportKind.SEVEN_ZIP;
+        }
+        return ImportKind.UNKNOWN;
+    }
+
+    private static String extensionFor(ImportKind importKind) {
+        return switch (importKind) {
+            case ZIP -> EXT_ZIP;
+            case SEVEN_ZIP -> EXT_7Z;
+            default -> EXT_YSM;
+        };
+    }
+
     private static ServerModelData processAndCacheModel(String modelId, RawYsmModel model, Path serverCacheDir, boolean isAuth, Set<String> validCacheFiles) {
         String sha256 = model.properties.sha256;
         if (sha256 == null || sha256.isEmpty()) return null;
@@ -638,7 +741,7 @@ public final class ServerModelManager {
             boolean needsUpdate = true;
             if (Files.exists(cacheFile)) {
                 byte[] existingData = Files.readAllBytes(cacheFile);
-                if (YsmCrypt.verifyServerCache(existingData, hashes[0], hashes[1])) {
+                if (YsmCrypt.verifyServerCache(existingData, hashes[0], hashes[1]) && canReadServerCache(existingData, modelId)) {
                     needsUpdate = false;
                 }
             }
@@ -664,6 +767,16 @@ public final class ServerModelManager {
         } catch (Exception e) {
             YesSteveModel.LOGGER.error("Failed to process and cache model: " + modelId, e);
             return null;
+        }
+    }
+
+    private static boolean canReadServerCache(byte[] existingData, String modelId) {
+        try {
+            YsmCrypt.readStrict(existingData, serverKey);
+            return true;
+        } catch (Exception e) {
+            YesSteveModel.LOGGER.warn("[YSM] Rebuilding unreadable server model cache: {}", modelId);
+            return false;
         }
     }
 
@@ -946,6 +1059,223 @@ public final class ServerModelManager {
         return AUTH_MODELS;
     }
 
+    public static boolean isModelUploadAllowed() {
+        try {
+            return ServerConfig.ALLOW_MODEL_UPLOAD.get();
+        } catch (IllegalStateException e) {
+            return true;
+        }
+    }
+
+    public static int getModelUploadMaxBytes() {
+        try {
+            return Math.max(1, ServerConfig.MODEL_UPLOAD_MAX_MB.get()) * 1024 * 1024;
+        } catch (IllegalStateException e) {
+            return 128 * 1024 * 1024;
+        }
+    }
+
+    public static int getModelUploadChunksPerTick() {
+        try {
+            return Math.max(1, ServerConfig.MODEL_UPLOAD_CHUNKS_PER_TICK.get());
+        } catch (IllegalStateException e) {
+            return 4;
+        }
+    }
+
+    public static UploadStartResult beginModelUpload(ServerPlayer sender, String requestedModelId, String fileName, int totalBytes, String sha256) {
+        cleanupExpiredUploads();
+        if (!isModelUploadAllowed()) {
+            return UploadStartResult.reject((byte) 6, "Model import disabled");
+        }
+        if (sender == null || !NetworkHandler.isPlayerConnected(sender)) {
+            return UploadStartResult.reject((byte) 3, "No import permission");
+        }
+        String modelId = normalizeUploadedModelId(requestedModelId);
+        ImportKind importKind = importKindFromFileName(fileName);
+        if (modelId == null || importKind == ImportKind.UNKNOWN || sha256 == null || !sha256.matches("[0-9a-fA-F]{64}")) {
+            return UploadStartResult.reject((byte) 5, "Invalid model id or hash");
+        }
+        if (importKind == ImportKind.SEVEN_ZIP) {
+            return UploadStartResult.reject((byte) 7, "7z import is not supported yet");
+        }
+        int maxBytes = getModelUploadMaxBytes();
+        if (totalBytes <= 0 || totalBytes > maxBytes) {
+            return UploadStartResult.reject((byte) 2, "File exceeds server limit");
+        }
+        if (CACHE_NAME_INFO.containsKey(modelId) || uploadStates.values().stream().anyMatch(state -> state.modelId.equals(modelId))) {
+            return UploadStartResult.reject((byte) 1, "Model ID already exists");
+        }
+
+        long uploadId;
+        do {
+            uploadId = theRandom.nextLong();
+        } while (uploadId == 0L || uploadStates.containsKey(uploadId));
+
+        ModelUploadState state = new ModelUploadState(uploadId, sender.getUUID(), modelId, fileName, importKind, totalBytes, sha256.toLowerCase(Locale.ROOT));
+        uploadStates.put(uploadId, state);
+        return new UploadStartResult(uploadId, (byte) 0, UPLOAD_CHUNK_SIZE, maxBytes, getModelUploadChunksPerTick(), "");
+    }
+
+    public static void receiveModelUploadChunk(ServerPlayer sender, long uploadId, int offset, byte[] data) {
+        ModelUploadState state = uploadStates.get(uploadId);
+        if (state == null || sender == null || !state.owner.equals(sender.getUUID())) {
+            return;
+        }
+        state.touch();
+        if (data == null || offset < 0 || offset + data.length > state.data.length || offset != state.receivedBytes) {
+            state.failed = true;
+            return;
+        }
+        System.arraycopy(data, 0, state.data, offset, data.length);
+        state.receivedBytes += data.length;
+    }
+
+    public static UploadFinishResult finishModelUpload(ServerPlayer sender, long uploadId) {
+        ModelUploadState state = uploadStates.remove(uploadId);
+        if (state == null || sender == null || !state.owner.equals(sender.getUUID())) {
+            return UploadFinishResult.reject(uploadId, (byte) 4, "Session expired");
+        }
+        if (state.failed || state.receivedBytes != state.data.length) {
+            return UploadFinishResult.reject(uploadId, (byte) 5, "Incomplete upload");
+        }
+        String actualSha256 = DigestUtil.sha256Hex(state.data);
+        if (!state.sha256.equals(actualSha256)) {
+            YesSteveModel.LOGGER.warn("[YSM] Import transfer hash mismatch modelId={} file={} type={} declaredSha256={} actualSha256={} bytes={} received={}",
+                    state.modelId, state.fileName, state.importKind, state.sha256, actualSha256, state.data.length, state.receivedBytes);
+            return UploadFinishResult.reject(uploadId, (byte) 1, "Hash mismatch");
+        }
+
+        RawYsmModel rawModel;
+        try {
+            rawModel = parseUploadedModel(state.data, "import:" + state.fileName, state.importKind);
+        } catch (Exception e) {
+            YesSteveModel.LOGGER.error("[YSM] Failed to parse imported model modelId={} file={} type={} rawSha256={} bytes={}",
+                    state.modelId, state.fileName, state.importKind, actualSha256, state.data.length, e);
+            return UploadFinishResult.reject(uploadId, (byte) 2, e.getMessage());
+        }
+
+        try {
+            if (processAndCacheModel(state.modelId, rawModel, CACHE_SERVER, false, new HashSet<>()) == null) {
+                return UploadFinishResult.reject(uploadId, (byte) 2, "Server failed to cache model");
+            }
+            Path target = CUSTOM.resolve(state.modelId + extensionFor(state.importKind)).normalize();
+            Path customRoot = CUSTOM.toAbsolutePath().normalize();
+            Path absoluteTarget = target.toAbsolutePath().normalize();
+            if (!absoluteTarget.startsWith(customRoot)) {
+                return UploadFinishResult.reject(uploadId, (byte) 6, "Server rejected write");
+            }
+            Files.createDirectories(absoluteTarget.getParent());
+            Path temp = Files.createTempFile(absoluteTarget.getParent(), absoluteTarget.getFileName().toString(), ".tmp");
+            Files.write(temp, state.data);
+            try {
+                Files.move(temp, absoluteTarget, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, absoluteTarget, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception e) {
+            YesSteveModel.LOGGER.error("[YSM] Failed to store imported model: " + state.modelId, e);
+            return UploadFinishResult.reject(uploadId, (byte) 3, e.getMessage());
+        }
+
+        ModelLoadResult reloadResult = reloadModelsAfterImport();
+        if (!reloadResult.isSuccess()) {
+            Component errorMessage = reloadResult.getErrorMessage();
+            return UploadFinishResult.reject(uploadId, (byte) 8, errorMessage == null ? "Imported model scan failed" : errorMessage.getString());
+        }
+        if (!reloadResult.getModelDefinitions().containsKey(state.modelId)) {
+            YesSteveModel.LOGGER.warn("[YSM] Imported model was written but not visible after scan: modelId={} file={} type={} rawSha256={} contentHash={}",
+                    state.modelId, state.fileName, state.importKind, actualSha256, rawModel.properties.sha256);
+            return UploadFinishResult.reject(uploadId, (byte) 8, "Imported model is not visible after scan");
+        }
+
+        YesSteveModel.LOGGER.info("[YSM] Imported model '{}' from {} as {}", state.modelId, sender.getGameProfile().getName(), state.importKind);
+        long[] hashes = YsmCrypt.calculateModelHashes(rawModel.properties.sha256, serverKey);
+        return new UploadFinishResult(uploadId, (byte) 0, state.modelId, hashes[0], hashes[1], "");
+    }
+
+    private static ModelLoadResult reloadModelsAfterImport() {
+        Map<String, ServerModelData> loadedModels = new LinkedHashMap<>();
+        Set<String> authIds = new HashSet<>();
+        Set<String> validCacheFiles = new HashSet<>();
+
+        try {
+            packs.clear();
+            scanDirectoryPacks(BUILT);
+            scanDirectoryPacks(CUSTOM);
+            scanDirectoryPacks(AUTH);
+
+            scanDirectoryModels(BUILT, CACHE_SERVER, loadedModels, authIds, validCacheFiles, false);
+            scanDirectoryModels(CUSTOM, CACHE_SERVER, loadedModels, authIds, validCacheFiles, false);
+            scanDirectoryModels(AUTH, CACHE_SERVER, loadedModels, authIds, validCacheFiles, true);
+            cleanupServerCache(validCacheFiles);
+            ModelLoadResult result = new ModelLoadResult(true, null, loadedModels, authIds.toArray(new String[0]));
+            onModelLoadComplete(result, null);
+            syncLoadedModelsToPlayers();
+            return result;
+        } catch (Exception e) {
+            YesSteveModel.LOGGER.error("[YSM] Failed to reload models after import", e);
+            return new ModelLoadResult(false, Component.literal(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()), null, null);
+        }
+    }
+
+    private static void cleanupServerCache(Set<String> validCacheFiles) {
+        try (Stream<Path> stream = Files.list(CACHE_SERVER)) {
+            stream.forEach(file -> {
+                if (!validCacheFiles.contains(file.getFileName().toString())) {
+                    try {
+                        Files.deleteIfExists(file);
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void syncLoadedModelsToPlayers() {
+        MinecraftServer currentServer = GameInstance.getServer();
+        if (currentServer == null) {
+            return;
+        }
+        currentServer.execute(() -> {
+            List<ServerPlayer> players = currentServer.getPlayerList().getPlayers();
+            for (ServerPlayer player : players) {
+                PlayerModelSelectionStore.restore(player);
+                validatePlayerModel(player);
+            }
+            nativeSyncModels(players.stream().filter(NetworkHandler::isPlayerConnected).map(ServerPlayer::getUUID).toArray(UUID[]::new),
+                    players.stream().filter(NetworkHandler::isPlayerConnected).map(serverPlayer -> serverPlayer.getGameProfile().getName()).toArray(String[]::new),
+                    collectPlayerModelIds(players),
+                    null);
+        });
+    }
+
+    @Nullable
+    private static String normalizeUploadedModelId(@Nullable String modelId) {
+        String normalized = ModelIdUtil.normalizeImportModelId(modelId);
+        boolean stripped;
+        do {
+            stripped = false;
+            for (String extension : new String[]{EXT_YSM, EXT_ZIP, EXT_7Z}) {
+                if (normalized.endsWith(extension)) {
+                    normalized = normalized.substring(0, normalized.length() - extension.length());
+                    stripped = true;
+                }
+            }
+        } while (stripped);
+        normalized = ModelIdUtil.normalizeImportModelId(normalized);
+        if (!ModelIdUtil.isValidModelId(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private static void cleanupExpiredUploads() {
+        long now = System.currentTimeMillis();
+        uploadStates.entrySet().removeIf(entry -> now - entry.getValue().lastTouchedMs > UPLOAD_SESSION_TIMEOUT_MS);
+    }
+
     public static void requestPlayerAuth(ServerPlayer serverPlayer, @Nullable Consumer<UUIDComponentData> consumer) {
         MinecraftServer currentServer = GameInstance.getServer();
         currentServer.execute(() -> {
@@ -973,6 +1303,7 @@ public final class ServerModelManager {
             currentServer.execute(() -> {
                 List<ServerPlayer> players = currentServer.getPlayerList().getPlayers();
                 for (ServerPlayer value : players) {
+                    PlayerModelSelectionStore.restore(value);
                     validatePlayerModel(value);
                 }
                 nativeSyncModels(players.stream().filter(NetworkHandler::isPlayerConnected).map((player) -> player.getUUID()).toArray(i -> new UUID[i]), players.stream().filter(NetworkHandler::isPlayerConnected).map(serverPlayer -> serverPlayer.getGameProfile().getName()).toArray(i2 -> new String[i2]), collectPlayerModelIds(players), consumer2);
@@ -1101,25 +1432,47 @@ public final class ServerModelManager {
 
     public static Pair<String, String> getDefaultModelConfig() {
         String defaultModelId = ServerConfig.DEFAULT_MODEL_ID.get();
-        String defaultTexture = ServerConfig.DEFAULT_MODEL_TEXTURE.get();
-        if (defaultTexture.toLowerCase().endsWith(".png") && defaultTexture.length() > 4) {
-            defaultTexture = defaultTexture.substring(0, defaultTexture.length() - 4);
-        }
+        String defaultTexture = normalizeTextureId(ServerConfig.DEFAULT_MODEL_TEXTURE.get());
         if (!initialized) {
             return Pair.of(defaultModelId, defaultTexture);
         }
-        ServerModelData modelData = CACHE_NAME_INFO.get(defaultModelId);
-        if (modelData == null) {
+        String resolvedTexture = resolveTextureOrDefault(defaultModelId, defaultTexture);
+        if (resolvedTexture == null) {
             return Pair.of("default", "default");
         }
-        if (!modelData.getModelInfo().getTextures().contains(defaultTexture)) {
-            if (modelData.getModelInfo().getTextures().contains(modelData.getLoadedModelData().getModelProperties().getDefaultTexture())) {
-                defaultTexture = modelData.getLoadedModelData().getModelProperties().getDefaultTexture();
-            } else {
-                defaultTexture = modelData.getModelInfo().getTextures().get(0);
-            }
+        return Pair.of(defaultModelId, resolvedTexture);
+    }
+
+    @Nullable
+    public static String resolveTextureOrDefault(String modelId, @Nullable String requestedTexture) {
+        ServerModelData modelData = CACHE_NAME_INFO.get(modelId);
+        if (modelData == null) {
+            return null;
         }
-        return Pair.of(defaultModelId, defaultTexture);
+        List<String> textures = modelData.getModelInfo().getTextures();
+        if (textures.isEmpty()) {
+            return null;
+        }
+        String normalizedRequested = normalizeTextureId(requestedTexture);
+        if (normalizedRequested != null && textures.contains(normalizedRequested)) {
+            return normalizedRequested;
+        }
+        String modelDefault = normalizeTextureId(modelData.getLoadedModelData().getModelProperties().getDefaultTexture());
+        if (modelDefault != null && textures.contains(modelDefault)) {
+            return modelDefault;
+        }
+        return textures.get(0);
+    }
+
+    @Nullable
+    private static String normalizeTextureId(@Nullable String textureId) {
+        if (textureId == null) {
+            return null;
+        }
+        if (textureId.toLowerCase(Locale.ROOT).endsWith(".png") && textureId.length() > 4) {
+            return textureId.substring(0, textureId.length() - 4);
+        }
+        return textureId;
     }
 
     private static void onAuthDataReceived(UUIDComponentData uuidComponentData, @Nullable Object obj) {
@@ -1130,6 +1483,8 @@ public final class ServerModelManager {
     }
 
     public static void validatePlayerModel(ServerPlayer serverPlayer) {
+        NetworkOnlineDebugLog.info("validatePlayerModel: {} cacheEmpty={} cacheSize={}",
+                serverPlayer.getName().getString(), CACHE_NAME_INFO.isEmpty(), CACHE_NAME_INFO.size());
         if (!CACHE_NAME_INFO.isEmpty()) {
             ModelInfoCapability.get(serverPlayer).ifPresent(modelInfoCap -> {
                 AuthModelsCapability.get(serverPlayer).ifPresent(authModelsCap -> {
@@ -1137,13 +1492,87 @@ public final class ServerModelManager {
                         NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(authModelsCap.getAuthModels()), serverPlayer);
                     }
                     String modelId = modelInfoCap.getModelId();
-                    if (!getServerModelInfo().containsKey(modelId) || ((AUTH_MODELS.contains(modelId) && !authModelsCap.containsModel(modelInfoCap.getModelId())) || !CACHE_NAME_INFO.get(modelId).getModelInfo().getTextures().contains(modelInfoCap.getSelectTexture()))) {
+                    boolean inCache = getServerModelInfo().containsKey(modelId);
+                    boolean isAuth = AUTH_MODELS.contains(modelId);
+                    boolean hasAuth = authModelsCap.containsModel(modelId);
+                    NetworkOnlineDebugLog.info("validate: modelId={} inCache={} isAuth={} hasAuth={}",
+                            modelId, inCache, isAuth, hasAuth);
+                    boolean changed = false;
+                    if (!inCache || (isAuth && !hasAuth)) {
+                        NetworkOnlineDebugLog.info("validate: RESET_TO_DEFAULT reason={}", !inCache ? "not_in_cache" : "no_auth");
                         modelInfoCap.resetToDefault();
+                        changed = true;
+                    } else {
+                        String resolvedTexture = resolveTextureOrDefault(modelId, modelInfoCap.getSelectTexture());
+                        if (resolvedTexture == null) {
+                            NetworkOnlineDebugLog.info("validate: RESET_TO_DEFAULT reason=texture_null");
+                            modelInfoCap.resetToDefault();
+                            changed = true;
+                        } else if (!resolvedTexture.equals(modelInfoCap.getSelectTexture())) {
+                            NetworkOnlineDebugLog.info("validate: TEXTURE_CHANGE {} -> {}", modelInfoCap.getSelectTexture(), resolvedTexture);
+                            modelInfoCap.setModelAndTexture(modelId, resolvedTexture);
+                            changed = true;
+                        } else {
+                            NetworkOnlineDebugLog.info("validate: OK modelId={}", modelId);
+                        }
+                    }
+                    if (changed) {
+                        PlayerModelSelectionStore.saveCurrentSelection(serverPlayer, modelInfoCap);
+                        PlayerDataSaveBridge.save(serverPlayer);
                     }
                     modelInfoCap.retainAnimationKeys(modelHashSet);
                 });
             });
+        } else {
+            NetworkOnlineDebugLog.info("validatePlayerModel: SKIP cache_empty");
         }
+    }
+
+    public record UploadStartResult(long uploadId, byte status, int chunkSize, int maxTotalBytes, int chunksPerTick, String message) {
+        private static UploadStartResult reject(byte status, String message) {
+            return new UploadStartResult(0L, status, UPLOAD_CHUNK_SIZE, getModelUploadMaxBytes(), getModelUploadChunksPerTick(), message);
+        }
+    }
+
+    public record UploadFinishResult(long uploadId, byte status, String modelId, long hash1, long hash2, String message) {
+        private static UploadFinishResult reject(long uploadId, byte status, String message) {
+            return new UploadFinishResult(uploadId, status, "", 0L, 0L, message);
+        }
+    }
+
+    private static class ModelUploadState {
+        private final long uploadId;
+        private final UUID owner;
+        private final String modelId;
+        private final String fileName;
+        private final ImportKind importKind;
+        private final byte[] data;
+        private final String sha256;
+        private int receivedBytes;
+        private boolean failed;
+        private long lastTouchedMs;
+
+        private ModelUploadState(long uploadId, UUID owner, String modelId, String fileName, ImportKind importKind, int totalBytes, String sha256) {
+            this.uploadId = uploadId;
+            this.owner = owner;
+            this.modelId = modelId;
+            this.fileName = fileName == null ? "" : fileName;
+            this.importKind = importKind;
+            this.data = new byte[totalBytes];
+            this.sha256 = sha256;
+            touch();
+        }
+
+        private void touch() {
+            this.lastTouchedMs = System.currentTimeMillis();
+        }
+    }
+
+    private enum ImportKind {
+        YSM,
+        ZIP,
+        SEVEN_ZIP,
+        UNKNOWN
     }
 
     private static class PendingTransfer {

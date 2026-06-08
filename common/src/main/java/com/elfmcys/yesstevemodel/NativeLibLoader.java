@@ -10,6 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import rip.ysm.api.PlatformAPI;
 
 import java.io.File;
 import java.io.IOException;
@@ -54,6 +55,13 @@ public final class NativeLibLoader {
     }
 
     public static void init() throws IOException {
+        if (PlatformAPI.isServer()) {
+            available = true;
+            loaded = false;
+            YesSteveModel.LOGGER.info("Skipping native library loading on dedicated server");
+            return;
+        }
+
         String path = System.getenv("YSM_CORE_LIB");
         if (StringUtil.isNullOrEmpty(path)) {
             path = extractAndGetLibPath();

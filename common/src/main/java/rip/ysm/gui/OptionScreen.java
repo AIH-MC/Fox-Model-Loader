@@ -1,6 +1,5 @@
 package rip.ysm.gui;
 
-import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -8,7 +7,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
-import rip.ysm.gpu.BlurStack;
 import rip.ysm.gui.components.buttons.FooterButton;
 import rip.ysm.gui.components.buttons.TabButton;
 
@@ -268,7 +266,7 @@ public abstract class OptionScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderTransparentBackground(g);
 
         renderPanelBackdrop(g);
 
@@ -393,14 +391,10 @@ public abstract class OptionScreen extends Screen {
     }
 
     private void renderPanelBackdrop(GuiGraphics g) {
-        if (GeneralConfig.BLUR_GUI == null || !GeneralConfig.BLUR_GUI.get()) return;
-        List<int[]> regions = new ArrayList<>();
-        collectBlurRegions(regions);
-        for (int[] r : regions) {
-            if (r[2] <= 0 || r[3] <= 0) continue;
-            BlurStack.pushBlur(r[0], r[1], r[2], r[3], 0.0f, 24.0f);
-        }
-        BlurStack.flush(g);
+        // Fully opaque panel background. Minecraft 1.21 blurs the world behind GUI screens, and a
+        // translucent panel let that blur bleed through onto the search box, text, model preview,
+        // etc. An opaque base blocks it completely so panel content stays sharp.
+        g.fill(panelLeft, panelTop, panelRight, panelBottom, 0xFF141418);
     }
 
     private void renderRowScrollbar(GuiGraphics g) {
@@ -526,7 +520,8 @@ public abstract class OptionScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        double delta = scrollY;
         for (OptionRow<?> row : activeRows) {
             if (row.isOverlayOpen() && row.overlayMouseScrolled(mouseX, mouseY, delta, rowScrollDisplay)) {
                 return true;
@@ -540,7 +535,7 @@ public abstract class OptionScreen extends Screen {
             rowScrollOffset = Mth.clamp((int) (rowScrollOffset - delta * 20), 0, maxRowScroll);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     private boolean isOnRowScrollbar(double mouseX, double mouseY) {

@@ -29,6 +29,7 @@ import it.unimi.dsi.fastutil.objects.Object2FloatArrayMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
@@ -56,6 +57,10 @@ public final class PlayerCapability extends CustomPlayerEntity {
 
     private Struct serverVarContainer;
 
+    private volatile RenderStateSnapshot capturedRenderState;
+
+    private final ThreadLocal<RenderStateSnapshot> activeRenderState = new ThreadLocal<>();
+
     public PlayerCapability(Player player) {
         super(player, player instanceof LocalPlayer, true);
         this.molangVarsMap = new Int2ReferenceOpenHashMap<>(8);
@@ -74,6 +79,73 @@ public final class PlayerCapability extends CustomPlayerEntity {
     @Nullable
     public Struct getServerVarContainer() {
         return this.serverVarContainer;
+    }
+
+    public void captureFrameRenderState(float entityYaw, float partialTick) {
+        this.capturedRenderState = createRenderState(entityYaw, partialTick);
+    }
+
+    public void beginRenderState(float entityYaw, float partialTick) {
+        this.activeRenderState.set(createRenderState(entityYaw, partialTick));
+    }
+
+    public void beginCapturedRenderState() {
+        RenderStateSnapshot snapshot = this.capturedRenderState;
+        if (snapshot == null) {
+            snapshot = createRenderState(Mth.rotLerp(0.0f, this.entity.yBodyRotO, this.entity.yBodyRot), 0.0f);
+        }
+        this.activeRenderState.set(snapshot);
+    }
+
+    public void endRenderState() {
+        this.activeRenderState.remove();
+    }
+
+    public boolean hasRenderState() {
+        return this.activeRenderState.get() != null;
+    }
+
+    public float getRenderStateWalkAnimationSpeed() {
+        RenderStateSnapshot snapshot = this.activeRenderState.get();
+        return snapshot == null ? 0.0f : snapshot.walkAnimationSpeed();
+    }
+
+    public float getRenderStateWalkAnimationPos() {
+        RenderStateSnapshot snapshot = this.activeRenderState.get();
+        return snapshot == null ? 0.0f : snapshot.walkAnimationPos();
+    }
+
+    public float getRenderStateBodyRot() {
+        RenderStateSnapshot snapshot = this.activeRenderState.get();
+        return snapshot == null ? 0.0f : snapshot.bodyRot();
+    }
+
+    public float getRenderStateNetHeadYaw() {
+        RenderStateSnapshot snapshot = this.activeRenderState.get();
+        return snapshot == null ? 0.0f : snapshot.netHeadYaw();
+    }
+
+    public float getRenderStateHeadPitch() {
+        RenderStateSnapshot snapshot = this.activeRenderState.get();
+        return snapshot == null ? 0.0f : snapshot.headPitch();
+    }
+
+    private RenderStateSnapshot createRenderState(float entityYaw, float partialTick) {
+        partialTick = sanitizePartialTick(partialTick);
+        return new RenderStateSnapshot(
+                this.entity.walkAnimation.speed(partialTick),
+                this.entity.walkAnimation.position(partialTick),
+                entityYaw,
+                Mth.rotLerp(partialTick, this.entity.yHeadRotO, this.entity.yHeadRot) - entityYaw,
+                Mth.lerp(partialTick, this.entity.xRotO, this.entity.getXRot())
+        );
+    }
+
+    private static float sanitizePartialTick(float partialTick) {
+        if (!Float.isFinite(partialTick)) {
+            return 0.0f;
+        }
+        return Mth.clamp(partialTick, 0.0f, 1.0f);
     }
 
     @Override
@@ -107,6 +179,8 @@ public final class PlayerCapability extends CustomPlayerEntity {
     @Override
     public void reset() {
         this.serverVarContainer = null;
+        this.capturedRenderState = null;
+        this.activeRenderState.remove();
         super.reset();
     }
 
@@ -245,5 +319,12 @@ public final class PlayerCapability extends CustomPlayerEntity {
                 this.currentVars.putAll(this.pendingDeltas.dequeue());
             }
         }
+    }
+
+    private record RenderStateSnapshot(float walkAnimationSpeed,
+                                       float walkAnimationPos,
+                                       float bodyRot,
+                                       float netHeadYaw,
+                                       float headPitch) {
     }
 }

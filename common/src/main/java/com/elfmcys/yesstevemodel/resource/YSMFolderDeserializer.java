@@ -9,12 +9,7 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
-import rip.ysm.imagestream.avif.AvifDecoder;
-import rip.ysm.imagestream.webp.WebpDecoder;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
@@ -944,26 +939,146 @@ public class YSMFolderDeserializer implements AutoCloseable {
             throw new RuntimeException("Unsupported image format for: " + path);
         }
 
-        if (format == 2 && data.length >= 24) {
-            int w = ((data[16] & 0xFF) << 24) | ((data[17] & 0xFF) << 16) | ((data[18] & 0xFF) << 8) | (data[19] & 0xFF);
-            int h = ((data[20] & 0xFF) << 24) | ((data[21] & 0xFF) << 16) | ((data[22] & 0xFF) << 8) | (data[23] & 0xFF);
-            return new ImageMeta(w, h, format);
+        ImageMeta img = switch (format) {
+            case 1 -> parseBmpMeta(data);
+            case 2 -> parsePngMeta(data);
+            case 3 -> parseJpegMeta(data);
+            case 4 -> parseWebpMeta(data);
+            case 5 -> parseAvifMeta(data);
+            default -> null;
+        };
+
+        if (img != null && img.width() > 0 && img.height() > 0) {
+            return img;
         }
 
-        try {
-            BufferedImage img = null;
-            switch (format) {
-                case 1, 3 -> img = ImageIO.read(new ByteArrayInputStream(data));
-                case 4 -> img = new WebpDecoder().read(data);
-                case 5 -> img = new AvifDecoder().read(data);
-            }
-            if (img != null) {
-                return new ImageMeta(img.getWidth(), img.getHeight(), format);
-            }
-            throw new RuntimeException("Failed to decode image dimensions for: " + path);
-        } catch (Exception e) {
-            throw new RuntimeException("Error processing image: " + path, e);
+        throw new RuntimeException("Failed to decode image dimensions for: " + path);
+    }
+
+    private static ImageMeta parsePngMeta(byte[] data) {
+        if (data.length < 24) return null;
+        return new ImageMeta(readIntBE(data, 16), readIntBE(data, 20), 2);
+    }
+
+    private static ImageMeta parseBmpMeta(byte[] data) {
+        if (data.length < 26) return null;
+        int dibHeaderSize = readIntLE(data, 14);
+        if (dibHeaderSize == 12) {
+            return new ImageMeta(readUnsignedShortLE(data, 18), readUnsignedShortLE(data, 20), 1);
         }
+        int width = readIntLE(data, 18);
+        int height = readIntLE(data, 22);
+        return new ImageMeta(Math.abs(width), Math.abs(height), 1);
+    }
+
+    private static ImageMeta parseJpegMeta(byte[] data) {
+        int offset = 2;
+        while (offset < data.length) {
+            while (offset < data.length && (data[offset] & 0xFF) != 0xFF) offset++;
+            while (offset < data.length && (data[offset] & 0xFF) == 0xFF) offset++;
+            if (offset >= data.length) break;
+
+            int marker = data[offset++] & 0xFF;
+            if (marker == 0xD9 || marker == 0xDA) break;
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue;
+            if (offset + 2 > data.length) break;
+
+            int length = readUnsignedShortBE(data, offset);
+            offset += 2;
+            if (length < 2 || offset + length - 2 > data.length) break;
+
+            if (isJpegStartOfFrame(marker) && length >= 7) {
+                int height = readUnsignedShortBE(data, offset + 1);
+                int width = readUnsignedShortBE(data, offset + 3);
+                return new ImageMeta(width, height, 3);
+            }
+            offset += length - 2;
+        }
+        return null;
+    }
+
+    private static boolean isJpegStartOfFrame(int marker) {
+        return marker == 0xC0 || marker == 0xC1 || marker == 0xC2 || marker == 0xC3
+                || marker == 0xC5 || marker == 0xC6 || marker == 0xC7
+                || marker == 0xC9 || marker == 0xCA || marker == 0xCB
+                || marker == 0xCD || marker == 0xCE || marker == 0xCF;
+    }
+
+    private static ImageMeta parseWebpMeta(byte[] data) {
+        int offset = 12;
+        while (offset + 8 <= data.length) {
+            int chunkSize = readIntLE(data, offset + 4);
+            if (chunkSize < 0 || offset + 8 + chunkSize > data.length) break;
+            int chunkData = offset + 8;
+
+            if (asciiEquals(data, offset, "VP8X") && chunkSize >= 10) {
+                int width = 1 + readUnsigned24LE(data, chunkData + 4);
+                int height = 1 + readUnsigned24LE(data, chunkData + 7);
+                return new ImageMeta(width, height, 4);
+            }
+            if (asciiEquals(data, offset, "VP8L") && chunkSize >= 5 && data[chunkData] == 0x2F) {
+                int bits = readIntLE(data, chunkData + 1);
+                int width = 1 + (bits & 0x3FFF);
+                int height = 1 + ((bits >>> 14) & 0x3FFF);
+                return new ImageMeta(width, height, 4);
+            }
+            if (asciiEquals(data, offset, "VP8 ") && chunkSize >= 10
+                    && data[chunkData + 3] == (byte) 0x9D && data[chunkData + 4] == 0x01 && data[chunkData + 5] == 0x2A) {
+                int width = readUnsignedShortLE(data, chunkData + 6) & 0x3FFF;
+                int height = readUnsignedShortLE(data, chunkData + 8) & 0x3FFF;
+                return new ImageMeta(width, height, 4);
+            }
+
+            offset += 8 + chunkSize + (chunkSize & 1);
+        }
+        return null;
+    }
+
+    private static ImageMeta parseAvifMeta(byte[] data) {
+        for (int typeOffset = 4; typeOffset + 16 <= data.length; typeOffset++) {
+            if (!asciiEquals(data, typeOffset, "ispe")) continue;
+            int boxStart = typeOffset - 4;
+            int boxSize = readIntBE(data, boxStart);
+            if (boxSize < 20 || boxStart + boxSize > data.length) continue;
+
+            int width = readIntBE(data, typeOffset + 8);
+            int height = readIntBE(data, typeOffset + 12);
+            return new ImageMeta(width, height, 5);
+        }
+        return null;
+    }
+
+    private static int readUnsignedShortBE(byte[] data, int offset) {
+        if (offset + 2 > data.length) return 0;
+        return ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
+    }
+
+    private static int readUnsignedShortLE(byte[] data, int offset) {
+        if (offset + 2 > data.length) return 0;
+        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8);
+    }
+
+    private static int readUnsigned24LE(byte[] data, int offset) {
+        if (offset + 3 > data.length) return 0;
+        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8) | ((data[offset + 2] & 0xFF) << 16);
+    }
+
+    private static int readIntBE(byte[] data, int offset) {
+        if (offset + 4 > data.length) return 0;
+        return ((data[offset] & 0xFF) << 24) | ((data[offset + 1] & 0xFF) << 16) | ((data[offset + 2] & 0xFF) << 8) | (data[offset + 3] & 0xFF);
+    }
+
+    private static int readIntLE(byte[] data, int offset) {
+        if (offset + 4 > data.length) return 0;
+        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8) | ((data[offset + 2] & 0xFF) << 16) | ((data[offset + 3] & 0xFF) << 24);
+    }
+
+    private static boolean asciiEquals(byte[] data, int offset, String value) {
+        if (offset < 0 || offset + value.length() > data.length) return false;
+        for (int i = 0; i < value.length(); i++) {
+            if (data[offset + i] != (byte) value.charAt(i)) return false;
+        }
+        return true;
     }
 
     public static int detectFormat(byte[] data) {

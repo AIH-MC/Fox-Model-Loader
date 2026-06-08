@@ -1,7 +1,9 @@
 package com.elfmcys.yesstevemodel.capability.fabric;
 
 import com.elfmcys.yesstevemodel.capability.ModelInfoCapability;
-import dev.onyxstudios.cca.api.v3.component.Component;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
+import org.ladysnake.cca.api.v3.component.Component;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
@@ -14,14 +16,29 @@ public final class ModelInfoComponent implements Component {
     }
 
     @Override
-    public void readFromNbt(CompoundTag tag) {
+    public void readFromNbt(CompoundTag tag, HolderLookup.Provider provider) {
         if (tag.contains("ModelInfo", Tag.TAG_COMPOUND)) {
-            capability.deserializeNBT(tag.getCompound("ModelInfo"));
+            readModelInfo(tag.getCompound("ModelInfo"), "nested");
+        } else if (tag.contains("model_id", Tag.TAG_STRING) || tag.contains("select_texture", Tag.TAG_STRING)) {
+            readModelInfo(tag, "flat");
+        } else if (!tag.isEmpty()) {
+            NetworkOnlineDebugLog.warn("ModelInfoComponent read skipped: no model info keys, keys={}", tag.getAllKeys());
+        } else {
+            NetworkOnlineDebugLog.info("ModelInfoComponent read empty tag");
         }
     }
 
     @Override
-    public void writeToNbt(CompoundTag tag) {
-        tag.put("ModelInfo", capability.serializeNBT());
+    public void writeToNbt(CompoundTag tag, HolderLookup.Provider provider) {
+        CompoundTag data = capability.serializeNBT();
+        tag.put("ModelInfo", data);
+        NetworkOnlineDebugLog.info("ModelInfoComponent write: modelId={} texture={} keys={}",
+                capability.getModelId(), capability.getSelectTexture(), data.getAllKeys());
+    }
+
+    private void readModelInfo(CompoundTag tag, String format) {
+        capability.deserializeNBT(tag);
+        NetworkOnlineDebugLog.info("ModelInfoComponent read {}: modelId={} texture={} keys={}",
+                format, capability.getModelId(), capability.getSelectTexture(), tag.getAllKeys());
     }
 }

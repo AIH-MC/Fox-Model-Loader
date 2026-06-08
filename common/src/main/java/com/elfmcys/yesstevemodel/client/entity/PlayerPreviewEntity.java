@@ -88,7 +88,7 @@ public final class PlayerPreviewEntity extends CustomPlayerEntity implements IPr
 
     @Override
     public boolean shouldSkipAnimation(AnimationEvent<?> event) {
-        return true;
+        return event.isFirstPerson();
     }
 
     @Override

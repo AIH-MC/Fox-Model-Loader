@@ -15,6 +15,8 @@ import com.elfmcys.yesstevemodel.network.message.S2CSyncProjectileModelPacket;
 import com.elfmcys.yesstevemodel.network.message.S2CSyncStarModelsPacket;
 import com.elfmcys.yesstevemodel.network.message.S2CSyncVehicleModelPacket;
 import com.elfmcys.yesstevemodel.network.message.S2CVersionCheckPacket;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import rip.ysm.api.capability.CapabilityLifecycle;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
@@ -32,6 +34,7 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 
 public final class CapabilityEvent {
+    private static final int TRACKING_MODEL_RESYNC_INTERVAL_TICKS = 100;
 
     private CapabilityEvent() {
     }
@@ -73,26 +76,73 @@ public final class CapabilityEvent {
             return EventResult.pass();
         }
         if (entity instanceof ServerPlayer player) {
-            getModelInfoCap(player).ifPresent(modelInfoCap -> {
-                if (!NetworkHandler.isPlayerConnected(player) && !modelInfoCap.isMandatory()) {
-                    modelInfoCap.markDirty();
-                    return;
-                }
-                modelInfoCap.stopAnimation(player);
-                Optional<S2CSetModelAndTexturePacket> optional = modelInfoCap.createSyncMessage(player, false);
-                Consumer<? super S2CSetModelAndTexturePacket> consumer = message -> NetworkHandler.sendToClientPlayer(message, player);
-                Objects.requireNonNull(modelInfoCap);
-                optional.ifPresentOrElse(consumer, modelInfoCap::markDirty);
-            });
             getAuthModelsCap(player).ifPresent(authModelsCap -> {
                 for (String modelId : ServerModelManager.getAuthModels()) {
                     authModelsCap.addModel(modelId);
                 }
                 NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(authModelsCap.getAuthModels()), player);
             });
+            PlayerModelSelectionStore.restore(player);
+            ServerModelManager.validatePlayerModel(player);
+            syncPlayerModelToSelf(player);
+            syncPlayerModelToTracking(player, false);
             getStarModelsCap(player).ifPresent(starModelsCap -> NetworkHandler.sendToClientPlayer(new S2CSyncStarModelsPacket(starModelsCap.getStarModels()), player));
         }
         return EventResult.pass();
+    }
+
+    public static void syncPlayerModelToSelf(ServerPlayer player) {
+        getModelInfoCap(player).ifPresent(modelInfoCap -> {
+            if (!canSyncModel(player, modelInfoCap)) {
+                modelInfoCap.markDirty();
+                return;
+            }
+            modelInfoCap.stopAnimation(player);
+            Optional<S2CSetModelAndTexturePacket> optional = modelInfoCap.createSyncMessage(player, false);
+            Consumer<? super S2CSetModelAndTexturePacket> consumer = message -> NetworkHandler.sendToClientPlayer(message, player);
+            Objects.requireNonNull(modelInfoCap);
+            optional.ifPresentOrElse(consumer, modelInfoCap::markDirty);
+        });
+    }
+
+    public static void syncPlayerModelToTracking(ServerPlayer player, boolean resetMessage) {
+        getModelInfoCap(player).ifPresent(modelInfoCap -> {
+            if (!canSyncModel(player, modelInfoCap)) {
+                NetworkOnlineDebugLog.info("syncToTracking: SKIP not_connected player={}", player.getName().getString());
+                modelInfoCap.markDirty();
+                return;
+            }
+            NetworkOnlineDebugLog.info("syncToTracking: {} modelId={} reset={}",
+                    player.getName().getString(), modelInfoCap.getModelId(), resetMessage);
+            modelInfoCap.createSyncMessage(player, resetMessage).ifPresentOrElse(
+                    message -> {
+                        NetworkOnlineDebugLog.info("syncToTracking: SENDING packet to {}", player.getName().getString());
+                        NetworkHandler.sendToTrackingEntityAndSelf(message, player);
+                    },
+                    () -> {
+                        NetworkOnlineDebugLog.info("syncToTracking: EMPTY -> markDirty");
+                        modelInfoCap.markDirty();
+                    });
+        });
+    }
+
+    public static void syncVisiblePlayerModelsTo(ServerPlayer receiver) {
+        MinecraftServer server = receiver.serverLevel().getServer();
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            getModelInfoCap(player).ifPresent(modelInfoCap -> {
+                if (!canSyncModel(player, modelInfoCap)) {
+                    return;
+                }
+                modelInfoCap.createSyncMessage(player, false).ifPresent(message -> NetworkHandler.sendToClientPlayer(message, receiver));
+            });
+        }
+    }
+
+    private static boolean canSyncModel(ServerPlayer player, ModelInfoCapability modelInfoCap) {
+        return NetworkHandler.isPlayerConnected(player) || modelInfoCap.isMandatory();
     }
 
     private static void onServerTick(MinecraftServer server) {
@@ -120,6 +170,9 @@ public final class CapabilityEvent {
                     });
                 } else {
                     cap.getAnimSync().updateAndSync(serverPlayer, true, bool);
+                    if (serverPlayer.tickCount % TRACKING_MODEL_RESYNC_INTERVAL_TICKS == 0) {
+                        syncPlayerModelToTracking(serverPlayer, false);
+                    }
                 }
             });
         }

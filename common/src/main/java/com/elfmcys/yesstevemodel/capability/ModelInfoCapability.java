@@ -1,10 +1,12 @@
 package com.elfmcys.yesstevemodel.capability;
 
+import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.sync.PlayerStateSynchronizer;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.util.StringPool;
 import com.elfmcys.yesstevemodel.network.message.S2CSetModelAndTexturePacket;
 import com.elfmcys.yesstevemodel.network.message.FeedbackData;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
 import com.google.common.collect.Queues;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceMap;
@@ -13,6 +15,7 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import org.apache.commons.lang3.tuple.Pair;
@@ -110,6 +113,9 @@ public class ModelInfoCapability {
     }
 
     public Optional<S2CSetModelAndTexturePacket> createSyncMessage(ServerPlayer serverPlayer, boolean fullSync) {
+        boolean found = ServerModelManager.getModelDefinition(this.modelId).isPresent();
+        NetworkOnlineDebugLog.info("createSyncMessage: {} modelId={} found={} cacheSize={}",
+                serverPlayer.getName().getString(), this.modelId, found, ServerModelManager.getServerModelInfo().size());
         return ServerModelManager.getModelDefinition(this.modelId).map(it -> {
             Object2FloatOpenHashMap<String> object2FloatOpenHashMap = this.molangStorage.computeIfAbsent(it.getLoadedModelData().getHashId(), i -> new Object2FloatOpenHashMap<>(0));
             while (true) {
@@ -211,14 +217,29 @@ public class ModelInfoCapability {
     }
 
     public void deserializeNBT(CompoundTag compoundTag) throws NumberFormatException {
-        this.modelId = compoundTag.getString("model_id");
-        this.selectTexture = compoundTag.getString("select_texture");
-        if (this.selectTexture.length() > 4 && this.selectTexture.toLowerCase().endsWith(".png")) {
-            this.selectTexture = this.selectTexture.substring(0, this.selectTexture.length() - 4);
+        if (!compoundTag.contains("model_id", Tag.TAG_STRING)) {
+            NetworkOnlineDebugLog.warn("ModelInfoCapability deserialize skipped: missing model_id, keys={}", compoundTag.getAllKeys());
+            return;
+        }
+        String savedModelId = compoundTag.getString("model_id");
+        if (savedModelId.isBlank()) {
+            NetworkOnlineDebugLog.warn("ModelInfoCapability deserialize skipped: blank model_id, keys={}", compoundTag.getAllKeys());
+            return;
+        }
+        this.modelId = savedModelId;
+        if (compoundTag.contains("select_texture", Tag.TAG_STRING)) {
+            this.selectTexture = normalizeTextureId(compoundTag.getString("select_texture"));
+        }
+        if (this.selectTexture.isBlank()) {
+            String resolvedTexture = ServerModelManager.resolveTextureOrDefault(this.modelId, null);
+            this.selectTexture = resolvedTexture == null ? ServerModelManager.getDefaultModelConfig().getRight() : resolvedTexture;
         }
         this.mandatory = compoundTag.getBoolean("mandatory");
         this.disabled = compoundTag.getBoolean("disabled");
         this.molangStorage.clear();
+        if (!compoundTag.contains("molang_storage", Tag.TAG_COMPOUND)) {
+            return;
+        }
         CompoundTag compound = compoundTag.getCompound("molang_storage");
         for (String str : compound.getAllKeys()) {
             CompoundTag compound2 = compound.getCompound(str);
@@ -231,5 +252,12 @@ public class ModelInfoCapability {
                 object2FloatOpenHashMap.put(str2, compound2.getFloat(str2));
             }
         }
+    }
+
+    private static String normalizeTextureId(String textureId) {
+        if (textureId.length() > 4 && textureId.toLowerCase().endsWith(".png")) {
+            return textureId.substring(0, textureId.length() - 4);
+        }
+        return textureId;
     }
 }

@@ -1,10 +1,8 @@
 package com.elfmcys.yesstevemodel.client.input;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
-import com.elfmcys.yesstevemodel.client.gui.DisclaimerScreen;
 import com.elfmcys.yesstevemodel.client.gui.ExtraPlayerConfigScreen;
 import com.elfmcys.yesstevemodel.client.gui.PlayerModelScreen;
-import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.config.ServerConfig;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.util.InputUtil;
@@ -41,8 +39,6 @@ public final class PlayerModelToggleKey {
             }
             if (NetworkHandler.isClientConnected() && !ServerConfig.CAN_SWITCH_MODEL.get()) {
                 Minecraft.getInstance().setScreen(new ExtraPlayerConfigScreen(null));
-            } else if (GeneralConfig.DISCLAIMER_SHOW.get()) {
-                Minecraft.getInstance().setScreen(new DisclaimerScreen());
             } else {
                 Minecraft.getInstance().setScreen(new PlayerModelScreen());
             }

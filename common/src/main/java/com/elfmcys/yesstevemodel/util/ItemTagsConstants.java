@@ -30,9 +30,13 @@ public class ItemTagsConstants {
 
     public static final TagKey<Item> TRIDENTS = createTag("tridents");
 
+    public static final TagKey<Item> LANCES = createTag("lances");
+
+    public static final TagKey<Item> MACE = createTag("mace");
+
     public static final TagKey<Item> SLASHBLADE = createTag("slashblade");
 
     private static TagKey<Item> createTag(String str) {
-        return TagKey.create(Registries.ITEM, new ResourceLocation(YesSteveModel.MOD_ID, str));
+        return TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(YesSteveModel.MOD_ID, str));
     }
 }

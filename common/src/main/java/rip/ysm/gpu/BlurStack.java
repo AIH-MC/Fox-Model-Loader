@@ -76,6 +76,10 @@ public final class BlurStack {
     public static void flush(GuiGraphics graphics) {
         if (regions.isEmpty()) return;
         if (!BlurShader.ensureCompiled()) {
+            // The custom blur shader could not compile (common on GL ES translation layers used
+            // by mobile launchers). Fall back to a solid translucent backdrop so panels stay
+            // visible instead of rendering nothing.
+            renderFallback(graphics);
             regions.clear();
             return;
         }
@@ -136,6 +140,39 @@ public final class BlurStack {
         RenderSystem.disableBlend();
 
         regions.clear();
+    }
+
+    /**
+     * Draws each pushed region as a solid translucent backdrop without using the blur shader.
+     * This guarantees that frosted-glass panels remain visible on platforms where the custom
+     * GLSL shader fails to compile (e.g. mobile launchers running through a GL ES translation
+     * layer). Rectangles use the standard GUI fill pipeline; pie regions reuse {@link Pie},
+     * which has its own shader-free fallback.
+     */
+    private static void renderFallback(GuiGraphics graphics) {
+        for (Region r : regions) {
+            int color = fallbackColor(r.tintRgba);
+            if (r.isPie) {
+                Pie.draw(graphics, r.pieCenterX, r.pieCenterY, r.pieInner, r.pieOuter, r.pieStart, r.pieEnd, color);
+            } else {
+                int x0 = Math.round(r.x);
+                int y0 = Math.round(r.y);
+                int x1 = Math.round(r.x + r.w);
+                int y1 = Math.round(r.y + r.h);
+                if (x1 > x0 && y1 > y0) {
+                    graphics.fill(x0, y0, x1, y1, color);
+                }
+            }
+        }
+    }
+
+    private static int fallbackColor(int tintRgba) {
+        // Ignore the (usually white) blur tint and use a dark translucent panel color so text
+        // and widgets drawn on top stay readable.
+        int alpha = (tintRgba >>> 24) & 0xFF;
+        if (alpha == 0) alpha = 0xFF;
+        int panelAlpha = Math.min(0xFF, Math.max(0xA0, alpha));
+        return (panelAlpha << 24) | 0x101014;
     }
 
     private static final class Region {

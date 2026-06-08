@@ -14,7 +14,7 @@ public class EntityFrameStateTracker<T extends Entity> {
 
     private Vec3 lastPosition;
 
-    private String cachedModelId;
+    private String cachedControllerState;
 
     public float currentTime;
 
@@ -33,7 +33,7 @@ public class EntityFrameStateTracker<T extends Entity> {
         this.currentTick = 0;
         this.lastPosition = null;
         this.positionDelta = Vec3.ZERO;
-        this.cachedModelId = null;
+        this.cachedControllerState = null;
         this.currentTime = 0.0f;
         this.timeDelta = 0.0f;
     }
@@ -56,7 +56,7 @@ public class EntityFrameStateTracker<T extends Entity> {
     public void onTimeUpdate(float f, float f2, float f3) {
         this.timeDelta = f - f2;
         updatePosition(f3);
-        this.cachedModelId = null;
+        this.cachedControllerState = null;
     }
 
     public void onTickUpdate(int i, int i2) {
@@ -84,12 +84,23 @@ public class EntityFrameStateTracker<T extends Entity> {
     }
 
     @Nullable
-    public String getCachedModelId() {
-        return this.cachedModelId;
+    public String getCachedControllerState() {
+        return this.cachedControllerState;
     }
 
+    public void setCachedControllerState(String state) {
+        this.cachedControllerState = state;
+    }
+
+    @Deprecated
+    @Nullable
+    public String getCachedModelId() {
+        return this.cachedControllerState;
+    }
+
+    @Deprecated
     public void setCachedModelId(String str) {
-        this.cachedModelId = str;
+        this.cachedControllerState = str;
     }
 
     public float getTimeDelta() {

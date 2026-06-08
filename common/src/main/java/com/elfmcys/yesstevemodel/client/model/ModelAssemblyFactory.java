@@ -7,6 +7,9 @@ import com.elfmcys.yesstevemodel.client.gui.metadata.ModelDisplayAssets;
 import com.elfmcys.yesstevemodel.client.texture.OuterFileTexture;
 import com.elfmcys.yesstevemodel.geckolib3.core.builder.Animation;
 import com.elfmcys.yesstevemodel.geckolib3.core.builder.AnimationController;
+import com.elfmcys.yesstevemodel.geckolib3.core.event.ParticleEventKeyFrame;
+import com.elfmcys.yesstevemodel.geckolib3.core.keyframe.BoneAnimation;
+import com.elfmcys.yesstevemodel.geckolib3.core.keyframe.event.EventKeyFrame;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.util.StringPool;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.value.IValue;
 import com.elfmcys.yesstevemodel.geckolib3.file.AnimationControllerFile;
@@ -26,6 +29,79 @@ import java.util.*;
 public class ModelAssemblyFactory {
 
     private static final String FIRST_PERSON_ARM_BONE = "fp_arm";
+
+    private static final Map<String, String> FIRST_PERSON_WEAPON_ARM_BONE_TARGETS = Map.ofEntries(
+            Map.entry("LeftArm", "LeftArm"),
+            Map.entry("LeftForeArm", "LeftForeArm"),
+            Map.entry("LeftHand", "LeftHand"),
+            Map.entry("LeftHandLocator", "LeftHandLocator"),
+            Map.entry("LeftItem", "LeftHandLocator"),
+            Map.entry("RightArm", "RightArm"),
+            Map.entry("RightForeArm", "RightForeArm"),
+            Map.entry("RightHand", "RightHand"),
+            Map.entry("RightHandLocator", "RightHandLocator"),
+            Map.entry("RightItem", "RightHandLocator"),
+            Map.entry("leftArm", "LeftArm"),
+            Map.entry("leftarm", "LeftArm"),
+            Map.entry("leftForeArm", "LeftForeArm"),
+            Map.entry("leftforearm", "LeftForeArm"),
+            Map.entry("leftHand", "LeftHand"),
+            Map.entry("lefthand", "LeftHand"),
+            Map.entry("leftHandLocator", "LeftHandLocator"),
+            Map.entry("lefthandlocator", "LeftHandLocator"),
+            Map.entry("leftItem", "LeftHandLocator"),
+            Map.entry("leftitem", "LeftHandLocator"),
+            Map.entry("rightArm", "RightArm"),
+            Map.entry("rightarm", "RightArm"),
+            Map.entry("rightForeArm", "RightForeArm"),
+            Map.entry("rightforearm", "RightForeArm"),
+            Map.entry("rightHand", "RightHand"),
+            Map.entry("righthand", "RightHand"),
+            Map.entry("rightHandLocator", "RightHandLocator"),
+            Map.entry("righthandlocator", "RightHandLocator"),
+            Map.entry("rightItem", "RightHandLocator"),
+            Map.entry("rightitem", "RightHandLocator")
+    );
+
+    private static final String MACE_MAINHAND_HOLD_ID = "hold_mainhand$minecraft:mace";
+    private static final String MACE_OFFHAND_HOLD_ID = "hold_offhand$minecraft:mace";
+    private static final String MACE_SWING_ID = "swing$minecraft:mace";
+    private static final String MACE_MAINHAND_HOLD = "hold_mainhand:mace";
+    private static final String MACE_OFFHAND_HOLD = "hold_offhand:mace";
+    private static final String MACE_SWING = "swing:mace";
+    private static final String MACE_MAINHAND_USE = "use_mainhand:mace";
+    private static final String MACE_OFFHAND_USE = "use_offhand:mace";
+    private static final String LANCE_MAINHAND_HOLD = "hold_mainhand:lance";
+    private static final String LANCE_OFFHAND_HOLD = "hold_offhand:lance";
+    private static final String LANCE_SWING = "swing:lance";
+    private static final String LANCE_MAINHAND_USE = "use_mainhand:lance";
+    private static final String LANCE_OFFHAND_USE = "use_offhand:lance";
+    private static final String LANCE_STAND = "lance_stand";
+    private static final String LANCE_JAB = "lance_jab";
+    private static final String LANCE_LUNGE = "lance_lunge";
+    private static final String LANCE_CHARGE = "lance_charge";
+    private static final String LANCE_RIDING_IDLE = "lance_riding_idle";
+    private static final String LANCE_RIDING_CHARGE = "lance_riding_charge";
+    private static final String LANCE_FALL_FLYING_CHARGE = "lance_fall_flying_charge";
+    private static final String SPEAR_MAINHAND_HOLD = "hold_mainhand:spear";
+    private static final String SPEAR_OFFHAND_HOLD = "hold_offhand:spear";
+    private static final String SPEAR_SWING = "swing:spear";
+    private static final String SPEAR_MAINHAND_USE = "use_mainhand:spear";
+    private static final String SPEAR_OFFHAND_USE = "use_offhand:spear";
+    private static final String[] FIRST_PERSON_LANCE_ANIMATIONS = {
+            LANCE_MAINHAND_HOLD,
+            LANCE_OFFHAND_HOLD,
+            LANCE_SWING,
+            LANCE_MAINHAND_USE,
+            LANCE_OFFHAND_USE,
+            LANCE_STAND,
+            LANCE_JAB,
+            LANCE_LUNGE,
+            LANCE_CHARGE,
+            LANCE_RIDING_IDLE,
+            LANCE_RIDING_CHARGE,
+            LANCE_FALL_FLYING_CHARGE
+    };
 
     private static ModelAssembly primaryAssembly;
 
@@ -81,6 +157,9 @@ public class ModelAssemblyFactory {
                 });
             }
         }
+        addWeaponAnimationAliases(object2ReferenceOpenHashMap);
+        addWeaponAnimationAliases(armAnimations);
+        addFirstPersonWeaponArmAnimations(object2ReferenceOpenHashMap, armAnimations);
         ConditionManager conditionManager = new ConditionManager();
         ObjectSet<String> objectSetKeySet = object2ReferenceOpenHashMap.keySet();
         Objects.requireNonNull(conditionManager);
@@ -205,5 +284,90 @@ public class ModelAssemblyFactory {
             }
         }
         return Object2ObjectMaps.unmodifiable(extraTextures);
+    }
+
+    private static void addWeaponAnimationAliases(Object2ReferenceMap<String, Animation> animations) {
+        aliasAnimation(animations, LANCE_MAINHAND_HOLD, SPEAR_MAINHAND_HOLD);
+        aliasAnimation(animations, LANCE_OFFHAND_HOLD, SPEAR_OFFHAND_HOLD);
+        aliasAnimation(animations, LANCE_SWING, SPEAR_SWING);
+        aliasAnimation(animations, LANCE_MAINHAND_USE, SPEAR_MAINHAND_USE);
+        aliasAnimation(animations, LANCE_OFFHAND_USE, SPEAR_OFFHAND_USE);
+        aliasAnimation(animations, LANCE_STAND, LANCE_MAINHAND_HOLD);
+        aliasAnimation(animations, LANCE_JAB, LANCE_SWING);
+        aliasAnimation(animations, LANCE_LUNGE, LANCE_SWING);
+        aliasAnimation(animations, LANCE_CHARGE, LANCE_MAINHAND_USE);
+        aliasAnimation(animations, LANCE_RIDING_IDLE, LANCE_MAINHAND_HOLD);
+        aliasAnimation(animations, LANCE_RIDING_CHARGE, LANCE_MAINHAND_USE);
+        aliasAnimation(animations, LANCE_FALL_FLYING_CHARGE, LANCE_MAINHAND_USE);
+        aliasAnimation(animations, MACE_MAINHAND_HOLD, MACE_MAINHAND_HOLD_ID);
+        aliasAnimation(animations, MACE_OFFHAND_HOLD, MACE_OFFHAND_HOLD_ID);
+        aliasAnimation(animations, MACE_SWING, MACE_SWING_ID);
+        aliasAnimation(animations, MACE_MAINHAND_USE, MACE_MAINHAND_HOLD);
+        aliasAnimation(animations, MACE_OFFHAND_USE, MACE_OFFHAND_HOLD);
+    }
+
+    private static void aliasAnimation(Object2ReferenceMap<String, Animation> animations, String alias, String source) {
+        Animation animation = animations.get(source);
+        if (animation != null) {
+            animations.putIfAbsent(alias, animation);
+        }
+    }
+
+    private static void addFirstPersonWeaponArmAnimations(Object2ReferenceMap<String, Animation> sourceAnimations, Object2ReferenceMap<String, Animation> armAnimations) {
+        for (String animationName : FIRST_PERSON_LANCE_ANIMATIONS) {
+            addFirstPersonArmAnimation(sourceAnimations, armAnimations, animationName);
+        }
+    }
+
+    private static void addFirstPersonArmAnimation(Object2ReferenceMap<String, Animation> sourceAnimations, Object2ReferenceMap<String, Animation> armAnimations, String animationName) {
+        Animation existing = armAnimations.get(animationName);
+        if (existing != null && !existing.isEmpty()) {
+            return;
+        }
+        Animation source = sourceAnimations.get(animationName);
+        Animation derived = deriveFirstPersonArmAnimation(animationName, source);
+        if (derived != null) {
+            armAnimations.put(animationName, derived);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Animation deriveFirstPersonArmAnimation(String animationName, Animation source) {
+        if (source == null || source.isEmpty()) {
+            return null;
+        }
+        LinkedHashMap<String, BoneAnimation> armBones = new LinkedHashMap<>();
+        for (BoneAnimation boneAnimation : source.boneAnimations) {
+            String targetBoneName = FIRST_PERSON_WEAPON_ARM_BONE_TARGETS.get(boneAnimation.boneName);
+            if (targetBoneName != null) {
+                BoneAnimation targetAnimation = targetBoneName.equals(boneAnimation.boneName)
+                        ? boneAnimation
+                        : new BoneAnimation(targetBoneName, boneAnimation.rotationKeyFrames, boneAnimation.positionKeyFrames, boneAnimation.scaleKeyFrames);
+                if (targetBoneName.equals(boneAnimation.boneName)) {
+                    armBones.put(targetBoneName, targetAnimation);
+                } else {
+                    armBones.putIfAbsent(targetBoneName, targetAnimation);
+                }
+            }
+        }
+        if (armBones.isEmpty()) {
+            return null;
+        }
+        Animation derived = new Animation(
+                animationName,
+                source.animationLength,
+                source.loop,
+                source.unKnowData1,
+                source.unKnowData2,
+                source.blendWeight,
+                source.override,
+                armBones.values().toArray(new BoneAnimation[0]),
+                new EventKeyFrame[0],
+                new ParticleEventKeyFrame[0],
+                new EventKeyFrame[0]
+        );
+        derived.sourceKey = source.sourceKey;
+        derived.isFromPrimaryAssembly = source.isFromPrimaryAssembly;
+        return derived;
     }
 }

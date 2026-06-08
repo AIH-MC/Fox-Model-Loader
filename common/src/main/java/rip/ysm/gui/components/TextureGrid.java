@@ -1,6 +1,7 @@
 package rip.ysm.gui.components;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
 import com.elfmcys.yesstevemodel.client.gui.ModelMetadataPresenter;
 import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
@@ -125,7 +126,7 @@ public final class TextureGrid extends OptionRow<Object> {
         int sw = (int) (TEX_BTN_W * scale);
         int sh = (int) (previewH * scale);
         RenderSystem.enableScissor(sx, sy, sw, sh);
-        ModelPreviewRenderer.renderLivingEntityPreview(x + TEX_BTN_W / 2.0f, y + TEX_BTN_H / 2.0f + 24.0f, 35.0f, mc.getFrameTime(), holder, RendererManager.getPlayerRenderer(), false, true);
+        ModelPreviewRenderer.renderLivingEntityPreview(x + TEX_BTN_W / 2.0f, y + TEX_BTN_H / 2.0f + 24.0f, 35.0f, pt, holder, RendererManager.getPlayerRenderer(), false, true);
         RenderSystem.disableScissor();
     }
 
@@ -151,6 +152,7 @@ public final class TextureGrid extends OptionRow<Object> {
         if (mc.player == null) return;
         PlayerCapability.get(mc.player).ifPresent(cap -> {
             cap.setCurrentTexture(name);
+            ClientModelManager.rememberSelectedModel(owner.modelId, name);
             NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(owner.modelId, name));
         });
     }
