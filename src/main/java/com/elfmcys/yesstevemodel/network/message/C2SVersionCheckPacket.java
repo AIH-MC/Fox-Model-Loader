@@ -6,6 +6,7 @@ import com.elfmcys.yesstevemodel.capability.StarModelsCapability;
 import com.elfmcys.yesstevemodel.event.CapabilityEvent;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import rip.ysm.api.network.PacketContext;
@@ -33,11 +34,19 @@ public class C2SVersionCheckPacket {
     public static void handle(C2SVersionCheckPacket message, PacketContext ctx) {
         ServerPlayer sender = ctx.getSender();
         if (sender != null && NetworkHandler.setChannelVersion(ctx.getConnection(), message.version)) {
+            AuthModelsCapability.get(sender).ifPresent(cap -> {
+                for (String modelId : ServerModelManager.getAuthModels()) {
+                    cap.addModel(modelId);
+                }
+            });
+            PlayerModelSelectionStore.restore(sender);
             ServerModelManager.validatePlayerModel(sender);
             ModelInfoCapability.get(sender).ifPresent(cap -> {
                 cap.setMandatory(false);
                 cap.stopAnimation(sender);
             });
+            CapabilityEvent.syncVisiblePlayerModelsTo(sender);
+            CapabilityEvent.syncPlayerModelToTracking(sender, false);
             AuthModelsCapability.get(sender).ifPresent(cap -> {
                 NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(cap.getAuthModels()), sender);
             });

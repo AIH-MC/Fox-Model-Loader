@@ -258,9 +258,15 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
             if (playerCapability != null && playerCapability.hasRenderState()) {
                 limbSwingAmount = playerCapability.getRenderStateWalkAnimationSpeed();
                 limbSwing = playerCapability.getRenderStateWalkAnimationPos();
-                if (!playerCapability.isLocalPlayerModel() && Math.abs(limbSwingAmount) <= ControllerActionResolver.MIN_MOVEMENT_SPEED) {
-                    limbSwingAmount = 0.0f;
-                    renderStateMovementSuppressed = true;
+                if (!playerCapability.isLocalPlayerModel()) {
+                    float physicalSpeed = MovementQuery.getPhysicalGroundSpeed(entity, this.positionTracker);
+                    if (physicalSpeed > MovementQuery.EPSILON) {
+                        limbSwingAmount = physicalSpeed;
+                        limbSwing = this.seekTime * 0.6662f;
+                    } else {
+                        limbSwingAmount = 0.0f;
+                        renderStateMovementSuppressed = true;
+                    }
                 }
             } else {
                 limbSwingAmount = livingEntity.walkAnimation.speed(partialTick);

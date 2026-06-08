@@ -24,8 +24,8 @@ public class S2CVersionCheckPacket {
 
     public static S2CVersionCheckPacket decode(FriendlyByteBuf buf) {
         String version = buf.readUtf();
-        boolean oysmServer = false;
-        boolean allowUpload = false;
+        boolean oysmServer = NetworkHandler.VERSION.equals(version);
+        boolean allowUpload = oysmServer;
         if (buf.readableBytes() == 1) {
             oysmServer = true;
             allowUpload = buf.readBoolean();

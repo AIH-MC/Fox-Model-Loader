@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.geckolib3.util;
 
+import com.elfmcys.yesstevemodel.client.entity.PlayerEntityFrameState;
 import com.elfmcys.yesstevemodel.geckolib3.core.EntityFrameStateTracker;
 import com.elfmcys.yesstevemodel.geckolib3.core.event.predicate.AnimationEvent;
 import net.minecraft.util.Mth;
@@ -50,14 +51,16 @@ public final class MovementQuery {
             return trackerSpeed;
         }
 
-        if (event != null) {
+        boolean suppressSyntheticWalk = shouldSuppressSyntheticWalk(tracker);
+
+        if (event != null && !suppressSyntheticWalk) {
             float limbSwingAmount = Math.abs(event.getLimbSwingAmount());
             if (isUsable(limbSwingAmount)) {
                 return limbSwingAmount;
             }
         }
 
-        if (entity instanceof LivingEntity livingEntity) {
+        if (entity instanceof LivingEntity livingEntity && !suppressSyntheticWalk) {
             float partialTick = event != null ? event.getPartialTick() : 1.0f;
             float walkSpeed = Math.abs(livingEntity.walkAnimation.speed(partialTick));
             if (isUsable(walkSpeed)) {
@@ -72,6 +75,24 @@ public final class MovementQuery {
         }
 
         Vec3 tickDelta = sanitize(new Vec3(entity.getX() - entity.xo, entity.getY() - entity.yo, entity.getZ() - entity.zo));
+        float tickSpeed = 20.0f * horizontalLength(tickDelta);
+        return Float.isFinite(tickSpeed) && tickSpeed > 0.0f ? tickSpeed : 0.0f;
+    }
+
+    public static float getPhysicalGroundSpeed(Entity entity, EntityFrameStateTracker<?> tracker) {
+        Vec3 trackerDelta = sanitize(tracker.getPositionDelta());
+        float trackerSpeed = getHorizontalSpeedFromDelta(trackerDelta, tracker);
+        if (isUsable(trackerSpeed)) {
+            return trackerSpeed;
+        }
+
+        Vec3 deltaMovement = sanitize(entity.getDeltaMovement());
+        float velocitySpeed = 20.0f * horizontalLength(deltaMovement);
+        if (isUsable(velocitySpeed)) {
+            return velocitySpeed;
+        }
+
+        Vec3 tickDelta = sanitize(new Vec3(entity.getX() - entity.xo, 0.0d, entity.getZ() - entity.zo));
         float tickSpeed = 20.0f * horizontalLength(tickDelta);
         return Float.isFinite(tickSpeed) && tickSpeed > 0.0f ? tickSpeed : 0.0f;
     }
@@ -124,6 +145,11 @@ public final class MovementQuery {
 
     private static boolean isUsable(float value) {
         return Float.isFinite(value) && value > EPSILON;
+    }
+
+    private static boolean shouldSuppressSyntheticWalk(EntityFrameStateTracker<?> tracker) {
+        return tracker instanceof PlayerEntityFrameState playerState
+                && !playerState.isLocalPlayer();
     }
 
     private static Vec3 sanitize(Vec3 vec3) {

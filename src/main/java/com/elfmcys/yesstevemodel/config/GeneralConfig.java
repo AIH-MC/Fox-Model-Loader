@@ -42,6 +42,8 @@ public class GeneralConfig {
 
     public static ModConfigSpec.BooleanValue RESOURCE_STATION_DEBUG_LOG;
 
+    public static ModConfigSpec.BooleanValue NETWORK_ONLINE_DEBUG_LOG;
+
     public static ModConfigSpec.BooleanValue EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR;
 
     public static ModConfigSpec.BooleanValue EXPERIMENTAL_ENABLE_ELYTRA_FOR_DEFAULT_AND_MISC_MODELS;
@@ -156,6 +158,8 @@ public class GeneralConfig {
         INPUT_STATE_DEBUG_LOG = builder.define("InputStateDebugLog", false);
         builder.comment("Print [YSM][ResourceStation] diagnostics for resource station config, listing, HTTP requests, and download candidates.");
         RESOURCE_STATION_DEBUG_LOG = builder.define("ResourceStationDebugLog", false);
+        builder.comment("Print detailed client/server online model sync diagnostics. Default off.");
+        NETWORK_ONLINE_DEBUG_LOG = builder.define("NetworkOnlineDebugLog", false);
         builder.comment("Allow fallback elytra rendering for models without ElytraLocator. Experimental and may not align perfectly.");
         EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR = builder.define("ExperimentalFallbackElytraWithoutLocator", false);
         builder.comment("Re-enable elytra rendering for default and misc built-in models, plus models whose ElytraLocator is nested under an Elytra display bone.");

@@ -129,6 +129,8 @@
   "gui.yes_steve_model.config.animation_frame_profiler.desc": "Collect animation timing, evaluation count, and cost diagnostics. Enable only while testing.",
   "gui.yes_steve_model.config.animation_debug_log": "Animation debug log",
   "gui.yes_steve_model.config.animation_debug_log.desc": "Print detailed [YSM-ANIM] log lines for each animation evaluation. Requires the animation frame profiler.",
+  "gui.yes_steve_model.config.network_online_debug_log": "Network online debug log",
+  "gui.yes_steve_model.config.network_online_debug_log.desc": "Print detailed client/server model sync logs for online play. Enable only while diagnosing multiplayer sync issues.",
   "gui.yes_steve_model.config.input_state_debug_log": "Input state debug log",
   "gui.yes_steve_model.config.input_state_debug_log.desc": "Print [YSM-INPUT] logs for left/right click, attack/use keys, vanilla swing/use state, and local animation pulses.",
   "gui.yes_steve_model.config.resource_station_debug_log": "Resource station debug log",

@@ -29,6 +29,7 @@
   "mixins": [
     "AbstractArrowEntityMixin",
     "ConnectionAccessor",
+    "PlayerListAccessor",
     "ProjectileEntityMixin",
     "ServerCommonPacketListenerImplAccessor",
     "ServerPlayerMixin"

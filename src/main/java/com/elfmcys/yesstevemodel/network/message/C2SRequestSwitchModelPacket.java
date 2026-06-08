@@ -5,6 +5,8 @@ import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.capability.AuthModelsCapability;
 import com.elfmcys.yesstevemodel.capability.ModelInfoCapability;
 import com.elfmcys.yesstevemodel.config.ServerConfig;
+import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import rip.ysm.api.network.PacketContext;
@@ -47,22 +49,27 @@ public class C2SRequestSwitchModelPacket {
                 if (!ServerModelManager.getServerModelInfo().containsKey(modelId)) {
                     YesSteveModel.LOGGER.warn("[YSM] Reject model switch for '{}': unknown model '{}'", sender.getScoreboardName(), modelId);
                     cap.resetToDefault();
+                    PlayerModelSelectionStore.saveCurrentSelection(sender, cap);
                 } else if (ServerModelManager.getAuthModels().contains(modelId) && !cap2.containsModel(modelId)) {
                     YesSteveModel.LOGGER.warn("[YSM] Reject model switch for '{}': model '{}' requires auth", sender.getScoreboardName(), modelId);
                     cap.resetToDefault();
+                    PlayerModelSelectionStore.saveCurrentSelection(sender, cap);
                 } else {
                     String textureId = ServerModelManager.resolveTextureOrDefault(modelId, message.textureId);
                     if (textureId == null) {
                         YesSteveModel.LOGGER.warn("[YSM] Reject model switch for '{}': model '{}' has no valid texture", sender.getScoreboardName(), modelId);
                         cap.resetToDefault();
+                        PlayerModelSelectionStore.saveCurrentSelection(sender, cap);
                     } else {
                         if (!textureId.equals(message.textureId)) {
                             YesSteveModel.LOGGER.warn("[YSM] Replaced invalid texture '{}' for model '{}' on player '{}' with '{}'", message.textureId, modelId, sender.getScoreboardName(), textureId);
                         }
                         cap.setModelAndTexture(modelId, textureId);
+                        PlayerModelSelectionStore.saveCurrentSelection(sender, cap);
                     }
                 }
                 cap.stopAnimation(sender);
+                PlayerDataSaveBridge.save(sender);
             });
         });
     }

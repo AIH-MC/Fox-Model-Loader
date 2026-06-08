@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.gui.button;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.capability.StarModelsCapability;
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.resource.models.Metadata;
 import com.elfmcys.yesstevemodel.client.animation.AnimationTracker;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
@@ -146,7 +147,8 @@ public class ModelButton extends Button {
                 String selectedModelId = this.modelIdHolder.getModelId();
                 String selectedTextureName = resolveSelectionTextureName();
                 cap.initModelWithTexture(selectedModelId, selectedTextureName);
-                if (NetworkHandler.isClientConnected() && !com.elfmcys.yesstevemodel.client.ClientModelManager.isLocalOnlyModel(selectedModelId)) {
+                ClientModelManager.rememberSelectedModel(selectedModelId, selectedTextureName);
+                if (NetworkHandler.isClientConnected() && !ClientModelManager.isLocalOnlyModel(selectedModelId)) {
                     NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(selectedModelId, selectedTextureName));
                 }
             });
