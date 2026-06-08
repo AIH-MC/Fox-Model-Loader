@@ -21,6 +21,7 @@ public final class ResourceDownloadManager {
     private static final int HISTORY_LIMIT = 128;
     private static final long SERVER_UPLOAD_START_TIMEOUT_MS = 15_000L;
     private static final long SERVER_UPLOAD_STALL_TIMEOUT_MS = 30_000L;
+    private static final long SERVER_UPLOAD_VERIFY_TIMEOUT_MS = 90_000L;
     private static final ExecutorService DOWNLOAD_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
         Thread thread = new Thread(runnable, "YSM Resource Download");
         thread.setDaemon(true);
@@ -247,6 +248,7 @@ public final class ResourceDownloadManager {
             task.uploadStartedAtMs = System.currentTimeMillis();
             task.lastUploadProgressAtMs = task.uploadStartedAtMs;
             task.lastUploadSentBytes = 0;
+            task.uploadFinishingAtMs = 0;
             task.message = Component.translatable("gui.yes_steve_model.import.state.server_starting");
             status = task.message;
             statusColor = ChatFormatting.YELLOW;
@@ -301,6 +303,9 @@ public final class ResourceDownloadManager {
             task.lastUploadSentBytes = session.getSentBytes();
             task.lastUploadProgressAtMs = System.currentTimeMillis();
         }
+        if (session.getState() == ModelUploadSession.State.FINISHING && task.uploadFinishingAtMs == 0) {
+            task.uploadFinishingAtMs = System.currentTimeMillis();
+        }
         status = task.message;
         statusColor = switch (session.getState()) {
             case COMPLETED -> ChatFormatting.GREEN;
@@ -328,6 +333,12 @@ public final class ResourceDownloadManager {
         if (session.getState() == ModelUploadSession.State.UPLOADING
                 && task.lastUploadProgressAtMs > 0
                 && now - task.lastUploadProgressAtMs > SERVER_UPLOAD_STALL_TIMEOUT_MS) {
+            ModelUploadSession.failCurrent(Component.translatable("gui.yes_steve_model.resource_station.upload_stalled"));
+            return;
+        }
+        if (session.getState() == ModelUploadSession.State.FINISHING
+                && task.uploadFinishingAtMs > 0
+                && now - task.uploadFinishingAtMs > SERVER_UPLOAD_VERIFY_TIMEOUT_MS) {
             ModelUploadSession.failCurrent(Component.translatable("gui.yes_steve_model.resource_station.upload_stalled"));
         }
     }
@@ -391,6 +402,7 @@ public final class ResourceDownloadManager {
         private Component message = Component.empty();
         private long uploadStartedAtMs;
         private long lastUploadProgressAtMs;
+        private long uploadFinishingAtMs;
         private int lastUploadSentBytes;
 
         private DownloadTask(ModelRepoEntry entry, ResourceStationConfig.State config) {

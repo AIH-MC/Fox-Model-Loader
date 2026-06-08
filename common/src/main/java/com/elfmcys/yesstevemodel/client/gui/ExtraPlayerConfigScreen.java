@@ -46,6 +46,7 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_frame_profiler", GeneralConfig.ANIMATION_FRAME_PROFILER)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_debug_log", GeneralConfig.ANIMATION_DEBUG_LOG)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("warn_repeated_animation_evaluation", GeneralConfig.WARN_REPEATED_ANIMATION_EVALUATION)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("network_online_debug_log", GeneralConfig.NETWORK_ONLINE_DEBUG_LOG)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("resource_station_monitor_log", GeneralConfig.RESOURCE_STATION_MONITOR_LOG)));
 
         OptionGroup experimentalTesting = new OptionGroup("experimental_testing")

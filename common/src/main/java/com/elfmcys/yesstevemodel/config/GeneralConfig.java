@@ -48,6 +48,8 @@ public class GeneralConfig {
 
     public static ModConfigSpec.BooleanValue RESOURCE_STATION_MONITOR_LOG;
 
+    public static ModConfigSpec.BooleanValue NETWORK_ONLINE_DEBUG_LOG;
+
     public static ModConfigSpec.IntValue MAX_CACHED_GPU_MODELS;
 
     public static ModConfigSpec.IntValue UNUSED_MODEL_TTL_SECONDS;
@@ -160,6 +162,8 @@ public class GeneralConfig {
         RELEASE_TEXTURE_BYTES_AFTER_UPLOAD = builder.define("ReleaseTextureBytesAfterUpload", false);
         builder.comment("Print detailed [YSM-RESOURCE] logs for resource station listing, HTTP, preview, and download diagnostics.");
         RESOURCE_STATION_MONITOR_LOG = builder.define("ResourceStationMonitorLog", false);
+        builder.comment("Print detailed client/server online model sync diagnostics. Default off.");
+        NETWORK_ONLINE_DEBUG_LOG = builder.define("NetworkOnlineDebugLog", false);
         builder.comment("Maximum client models allowed to keep GPU/native render caches. 0 disables LRU unloading.");
         MAX_CACHED_GPU_MODELS = builder.defineInRange("MaxCachedGpuModels", 0, 0, 512);
         builder.comment("Minimum idle time before an unused client model GPU/native cache can be unloaded by LRU.");

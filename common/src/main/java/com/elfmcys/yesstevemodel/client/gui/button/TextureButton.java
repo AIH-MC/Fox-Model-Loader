@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.gui.button;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
 import com.elfmcys.yesstevemodel.client.gui.ModelMetadataPresenter;
@@ -63,7 +64,8 @@ public class TextureButton extends Button {
         if (localPlayer != null) {
             PlayerCapability.get(localPlayer).ifPresent(cap -> {
                 cap.setCurrentTexture(this.previewEntity.getCurrentTextureName());
-                if (!com.elfmcys.yesstevemodel.client.ClientModelManager.isLocalOnlyModel(this.previewEntity.getModelId())) {
+                ClientModelManager.rememberSelectedModel(this.previewEntity.getModelId(), this.previewEntity.getCurrentTextureName());
+                if (!ClientModelManager.isLocalOnlyModel(this.previewEntity.getModelId())) {
                     NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(this.previewEntity.getModelId(), this.previewEntity.getCurrentTextureName()));
                 }
             });

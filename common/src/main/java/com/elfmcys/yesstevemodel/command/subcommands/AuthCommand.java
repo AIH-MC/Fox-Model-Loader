@@ -6,6 +6,8 @@ import com.elfmcys.yesstevemodel.capability.AuthModelsCapability;
 import com.elfmcys.yesstevemodel.capability.ModelInfoCapability;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.network.message.S2CSyncAuthModelsPacket;
+import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import com.elfmcys.yesstevemodel.util.YSMMessageFormatter;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -85,6 +87,8 @@ public class AuthCommand {
             ModelInfoCapability.get(player).ifPresent(modelIdCap -> {
                 if (ServerModelManager.getAuthModels().contains(modelIdCap.getModelId()) && !ownModelsCap.containsModel(modelIdCap.getModelId())) {
                     modelIdCap.resetToDefault();
+                    PlayerModelSelectionStore.saveCurrentSelection(player, modelIdCap);
+                    PlayerDataSaveBridge.save(player);
                 }
             });
             NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(ownModelsCap.getAuthModels()), player);
@@ -99,6 +103,8 @@ public class AuthCommand {
             ModelInfoCapability.get(player).ifPresent(modelIdCap -> {
                 if (ServerModelManager.getAuthModels().contains(modelIdCap.getModelId())) {
                     modelIdCap.resetToDefault();
+                    PlayerModelSelectionStore.saveCurrentSelection(player, modelIdCap);
+                    PlayerDataSaveBridge.save(player);
                 }
             });
             NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(ownModelCap.getAuthModels()), player);

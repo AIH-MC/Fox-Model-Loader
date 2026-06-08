@@ -20,6 +20,9 @@ import com.elfmcys.yesstevemodel.resource.YSMClientMapper;
 import com.elfmcys.yesstevemodel.resource.YSMFolderDeserializer;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.elfmcys.yesstevemodel.util.DigestUtil;
+import com.elfmcys.yesstevemodel.util.ModelIdUtil;
+import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
+import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import com.elfmcys.yesstevemodel.util.YSMNativeHelper;
 import com.elfmcys.yesstevemodel.util.YSMThreadPool;
 import com.google.common.collect.Maps;
@@ -71,7 +74,6 @@ public final class ServerModelManager {
     private static final String BUILTIN_RESOURCE_INDEX = BUILTIN_RESOURCE_ROOT + "index.txt";
     private static final long UPLOAD_SESSION_TIMEOUT_MS = 120_000L;
     private static final int UPLOAD_CHUNK_SIZE = 32_000;
-    private static final Pattern MODEL_ID_PATTERN = Pattern.compile("[a-z0-9_./-]+");
     private static final String EXT_YSM = ".ysm";
     private static final String EXT_ZIP = ".zip";
     private static final String EXT_7Z = ".7z";
@@ -1301,6 +1303,7 @@ public final class ServerModelManager {
         currentServer.execute(() -> {
             List<ServerPlayer> players = currentServer.getPlayerList().getPlayers();
             for (ServerPlayer player : players) {
+                PlayerModelSelectionStore.restore(player);
                 validatePlayerModel(player);
             }
             nativeSyncModels(players.stream().filter(NetworkHandler::isPlayerConnected).map(ServerPlayer::getUUID).toArray(UUID[]::new),
@@ -1312,13 +1315,7 @@ public final class ServerModelManager {
 
     @Nullable
     private static String normalizeUploadedModelId(@Nullable String modelId) {
-        if (modelId == null) {
-            return null;
-        }
-        String normalized = modelId.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
-        while (normalized.startsWith("/")) {
-            normalized = normalized.substring(1);
-        }
+        String normalized = ModelIdUtil.normalizeImportModelId(modelId);
         boolean stripped;
         do {
             stripped = false;
@@ -1329,8 +1326,8 @@ public final class ServerModelManager {
                 }
             }
         } while (stripped);
-        normalized = normalized.replaceAll("/+", "/");
-        if (normalized.isBlank() || normalized.contains("..") || !MODEL_ID_PATTERN.matcher(normalized).matches()) {
+        normalized = ModelIdUtil.normalizeImportModelId(normalized);
+        if (!ModelIdUtil.isValidModelId(normalized)) {
             return null;
         }
         return normalized;
@@ -1368,6 +1365,7 @@ public final class ServerModelManager {
             currentServer.execute(() -> {
                 List<ServerPlayer> players = currentServer.getPlayerList().getPlayers();
                 for (ServerPlayer value : players) {
+                    PlayerModelSelectionStore.restore(value);
                     validatePlayerModel(value);
                 }
                 nativeSyncModels(players.stream().filter(NetworkHandler::isPlayerConnected).map((player) -> player.getUUID()).toArray(i -> new UUID[i]), players.stream().filter(NetworkHandler::isPlayerConnected).map(serverPlayer -> serverPlayer.getName().getString()).toArray(i2 -> new String[i2]), collectPlayerModelIds(players), consumer2);
@@ -1562,16 +1560,24 @@ public final class ServerModelManager {
                         NetworkHandler.sendToClientPlayer(new S2CSyncAuthModelsPacket(authModelsCap.getAuthModels()), serverPlayer);
                     }
                     String modelId = modelInfoCap.getModelId();
+                    boolean changed = false;
                     if (!getServerModelInfo().containsKey(modelId) || (AUTH_MODELS.contains(modelId) && !authModelsCap.containsModel(modelInfoCap.getModelId()))) {
                         modelInfoCap.resetToDefault();
+                        changed = true;
                     } else {
                         String resolvedTexture = resolveTextureOrDefault(modelId, modelInfoCap.getSelectTexture());
                         if (resolvedTexture == null) {
                             modelInfoCap.resetToDefault();
+                            changed = true;
                         } else if (!resolvedTexture.equals(modelInfoCap.getSelectTexture())) {
                             YesSteveModel.LOGGER.warn("[YSM] Fixed invalid texture '{}' for model '{}' on player '{}', using '{}'", modelInfoCap.getSelectTexture(), modelId, serverPlayer.getScoreboardName(), resolvedTexture);
                             modelInfoCap.setModelAndTexture(modelId, resolvedTexture);
+                            changed = true;
                         }
+                    }
+                    if (changed) {
+                        PlayerModelSelectionStore.saveCurrentSelection(serverPlayer, modelInfoCap);
+                        PlayerDataSaveBridge.save(serverPlayer);
                     }
                     modelInfoCap.retainAnimationKeys(modelHashSet);
                 });

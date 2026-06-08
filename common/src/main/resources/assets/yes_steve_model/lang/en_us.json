@@ -129,6 +129,8 @@
   "gui.yes_steve_model.config.animation_frame_profiler.desc": "Collect animation timing, evaluation count, and cost diagnostics. Enable only while testing.",
   "gui.yes_steve_model.config.animation_debug_log": "Animation debug log",
   "gui.yes_steve_model.config.animation_debug_log.desc": "Print detailed [YSM-ANIM] log lines for each animation evaluation. Requires the animation frame profiler.",
+  "gui.yes_steve_model.config.network_online_debug_log": "Network online debug log",
+  "gui.yes_steve_model.config.network_online_debug_log.desc": "Print detailed client/server model sync logs for online play. Enable only while diagnosing multiplayer sync issues.",
   "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator": "Fallback elytra for models without ElytraLocator",
   "gui.yes_steve_model.config.experimental_fallback_elytra_without_locator.desc": "Experimental. Render elytra with vanilla-style placement when the model has no ElytraLocator.",
   "gui.yes_steve_model.config.experimental_enable_elytra_for_default_and_misc_models": "Re-enable elytra for default, misc, and nested-Elytra models",

@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.gui.resource;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.util.ModelIdUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -122,14 +123,9 @@ public final class ModelRepoClient {
 
     public static String safeModelId(ModelRepoEntry entry) {
         String stem = stripExtension(entry.fileName() == null || entry.fileName().isBlank() ? entry.name() : entry.fileName());
-        String normalized = stem.toLowerCase(Locale.ROOT)
-                .replace('\\', '/')
-                .replaceAll("[^a-z0-9_./-]+", "_")
-                .replaceAll("/+", "/")
-                .replaceAll("^/+", "")
-                .replaceAll("/+$", "");
-        if (!normalized.isBlank() && normalized.matches("[a-z0-9_./-]+")) {
-            if (!normalized.matches(".*[a-z0-9].*")) {
+        String normalized = ModelIdUtil.normalizeImportModelId(stem);
+        if (ModelIdUtil.isValidModelId(normalized)) {
+            if (!ModelIdUtil.hasLetterOrNumber(normalized)) {
                 return "repo/" + sha1(entry.url()).substring(0, 12);
             }
             return normalized;

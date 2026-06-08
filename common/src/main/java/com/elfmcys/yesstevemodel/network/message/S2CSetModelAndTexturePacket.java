@@ -1,9 +1,13 @@
 package com.elfmcys.yesstevemodel.network.message;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.event.EntityJoinCallbackEvent;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
 import rip.ysm.api.network.PacketContext;
@@ -42,15 +46,26 @@ public class S2CSetModelAndTexturePacket {
 
     public static void handle(S2CSetModelAndTexturePacket other, PacketContext ctx) {
         if (ctx.isClientSide()) {
+            NetworkOnlineDebugLog.info("RECEIVED S2CSetModelAndTexture: entityId={} modelId={} texture={} disabled={}",
+                    other.entityId, other.modelId, other.textureId, other.disabled);
             EntityJoinCallbackEvent.addCallback(other.entityId, entity -> applyOnClient(entity, other));
         }
     }
 
     @Environment(EnvType.CLIENT)
     public static void applyOnClient(Entity entity, S2CSetModelAndTexturePacket other) {
+        NetworkOnlineDebugLog.info("applyOnClient: entity={} modelId={} texture={}",
+                entity.getName().getString(), other.modelId, other.textureId);
         PlayerCapability.get(entity).ifPresent(cap -> {
-            cap.initModelWithTexture(other.modelId, other.textureId);
-            cap.setForceDisabled(other.disabled);
+            LocalPlayer localPlayer = Minecraft.getInstance().player;
+            boolean keepLocalOnlyModel = entity == localPlayer && ClientModelManager.isSelectedLocalOnlyModel(cap.getModelId());
+            if (!keepLocalOnlyModel) {
+                NetworkOnlineDebugLog.info("applyOnClient: APPLYING modelId={}", other.modelId);
+                cap.initModelWithTexture(other.modelId, other.textureId);
+                cap.setForceDisabled(other.disabled);
+            } else {
+                NetworkOnlineDebugLog.info("applyOnClient: SKIPPED (local-only model)");
+            }
             S2CSyncPlayerStatePacket.handleCapability(entity, other.entityModelSync);
         });
     }

@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client;
 import com.elfmcys.yesstevemodel.NativeLibLoader;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.ModelInfoCapability;
+import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.gui.IGuiWidget;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
 import com.elfmcys.yesstevemodel.client.model.ModelAssemblyFactory;
@@ -15,6 +16,7 @@ import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.network.message.C2SModelSyncPayload;
+import com.elfmcys.yesstevemodel.network.message.C2SRequestSwitchModelPacket;
 import com.elfmcys.yesstevemodel.resource.YSMBinaryDeserializer;
 import com.elfmcys.yesstevemodel.resource.YSMClientMapper;
 import com.elfmcys.yesstevemodel.resource.YSMFolderDeserializer;
@@ -22,6 +24,7 @@ import com.elfmcys.yesstevemodel.resource.models.ModelPackData;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.elfmcys.yesstevemodel.util.FileTypeUtil;
 import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
+import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
 import com.elfmcys.yesstevemodel.util.YSMThreadPool;
 import com.elfmcys.yesstevemodel.util.data.OrderedStringMap;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -33,6 +36,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import com.elfmcys.yesstevemodel.mixin.client.MinecraftAccessor;
 import java.util.concurrent.Executor;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
@@ -98,6 +102,10 @@ public class ClientModelManager {
     private static final SyncStatus syncState = new SyncStatus();
     private static volatile boolean isOysmServer = false;
     private static volatile boolean allowUpload = false;
+    private static volatile String selectedModelId;
+    private static volatile String selectedTextureId;
+    private static volatile String selectedLocalOnlyModelId;
+    private static volatile String selectedLocalOnlyTextureId;
 
     public enum SyncState {
         WAITING, LOADING, IDLE, PREPARING, SYNCING
@@ -597,6 +605,80 @@ public class ClientModelManager {
         return modelId != null && localOnlyModelIds.contains(modelId);
     }
 
+    public static boolean isSelectedLocalOnlyModel(String modelId) {
+        return modelId != null && modelId.equals(selectedModelId) && isLocalOnlyModel(modelId);
+    }
+
+    public static void rememberSelectedModel(String modelId, String textureId) {
+        selectedModelId = modelId;
+        selectedTextureId = textureId;
+        if (isLocalOnlyModel(modelId)) {
+            selectedLocalOnlyModelId = modelId;
+            selectedLocalOnlyTextureId = textureId;
+        } else if (modelId != null && modelId.equals(selectedLocalOnlyModelId)) {
+            clearSelectedLocalOnlyModel();
+        }
+    }
+
+    public static void restoreSelectedLocalOnlyModel() {
+        String modelId = selectedModelId;
+        String textureId = selectedTextureId;
+        if (modelId == null || !isLocalOnlyModel(modelId)) {
+            return;
+        }
+        ((Executor) Minecraft.getInstance()).execute(() -> {
+            if (!modelId.equals(selectedModelId) || !isLocalOnlyModel(modelId)) {
+                return;
+            }
+            Minecraft minecraft = Minecraft.getInstance();
+            LocalPlayer player = minecraft.player;
+            if (player == null) {
+                return;
+            }
+            PlayerCapability.get(player).ifPresent(cap -> {
+                if (!modelId.equals(cap.getModelId())) {
+                    cap.initModelWithTexture(modelId, textureId);
+                }
+            });
+        });
+    }
+
+    public static void onUploadedModelAvailable(String modelId) {
+        if (modelId == null || modelId.isBlank()) {
+            return;
+        }
+        localOnlyModelIds.remove(modelId);
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player != null) {
+            PlayerCapability.get(player).ifPresent(cap -> {
+                if (modelId.equals(cap.getModelId())) {
+                    String textureId = cap.getCurrentTextureName();
+                    rememberSelectedModel(modelId, textureId);
+                    NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(modelId, textureId));
+                }
+            });
+        }
+    }
+
+    public static void resendSelectedServerModel() {
+        String modelId = selectedModelId;
+        String textureId = selectedTextureId;
+        NetworkOnlineDebugLog.info("resendSelected: modelId={} textureId={} connected={}", modelId, textureId, NetworkHandler.isClientConnected());
+        if (modelId == null || modelId.isBlank() || textureId == null || isLocalOnlyModel(modelId) || !NetworkHandler.isClientConnected()) {
+            NetworkOnlineDebugLog.info("resendSelected: EARLY_RETURN (null/blank/localOnly/disconnected)");
+            return;
+        }
+        ((Executor) Minecraft.getInstance()).execute(() -> {
+            String currentModelId = selectedModelId;
+            String currentTextureId = selectedTextureId;
+            if (!modelId.equals(currentModelId) || currentTextureId == null || isLocalOnlyModel(modelId) || !modelAssemblyMap.containsKey(modelId)) {
+                return;
+            }
+            NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(modelId, currentTextureId));
+        });
+    }
+
     public static void removeLocalModels(Collection<String> modelIds) {
         if (modelIds == null || modelIds.isEmpty()) {
             return;
@@ -606,6 +688,12 @@ public class ClientModelManager {
             ArrayList<ModelAssembly> removed = new ArrayList<>();
             for (String modelId : modelIds) {
                 localOnlyModelIds.remove(modelId);
+                if (modelId.equals(selectedLocalOnlyModelId)) {
+                    clearSelectedLocalOnlyModel();
+                }
+                if (modelId.equals(selectedModelId)) {
+                    clearSelectedModel();
+                }
                 modelLastUsedAt.remove(modelId);
                 gpuCacheTrimmedModels.remove(modelId);
                 ModelAssembly assembly = map.remove(modelId);
@@ -659,6 +747,7 @@ public class ClientModelManager {
                 loadDirectoryModels(ServerModelManager.BUILT);
                 loadDirectoryModels(ServerModelManager.CUSTOM);
                 loadDirectoryModels(ServerModelManager.AUTH);
+                restoreSelectedLocalOnlyModel();
             } catch (Exception e) {
                 YesSteveModel.LOGGER.error("[YSM] Failed to reload local model folders", e);
                 error = Component.translatable("gui.yes_steve_model.import.error.local_reload_failed", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
@@ -838,6 +927,12 @@ public class ClientModelManager {
                     if (localOnlyModelIds.contains(str)) {
                         continue;
                     }
+                    if (str.equals(selectedLocalOnlyModelId)) {
+                        clearSelectedLocalOnlyModel();
+                    }
+                    if (str.equals(selectedModelId)) {
+                        clearSelectedModel();
+                    }
                     ModelAssembly assembly = map.remove(str);
                     if (assembly != null) {
                         removed.add(assembly);
@@ -853,6 +948,12 @@ public class ClientModelManager {
                 ModelAssembly[] modelAssemblies = new ModelAssembly[previousModelIds.length];
                 for (int i = 0; i < previousModelIds.length; i++) {
                     localOnlyModelIds.remove(previousModelIds[i]);
+                    if (previousModelIds[i].equals(selectedLocalOnlyModelId)) {
+                        clearSelectedLocalOnlyModel();
+                    }
+                    if (previousModelIds[i].equals(selectedModelId)) {
+                        selectedModelId = updatedModelIds[i];
+                    }
                     modelAssemblies[i] = map.remove(previousModelIds[i]);
                 }
                 for (int i = 0; i < modelAssemblies.length; i++) {
@@ -870,6 +971,17 @@ public class ClientModelManager {
                 });
             }
         });
+    }
+
+    private static void clearSelectedLocalOnlyModel() {
+        selectedLocalOnlyModelId = null;
+        selectedLocalOnlyTextureId = null;
+    }
+
+    private static void clearSelectedModel() {
+        selectedModelId = null;
+        selectedTextureId = null;
+        clearSelectedLocalOnlyModel();
     }
 
     private static void onModelDataReceived(@Nullable ClientModelInfo parsedBundle, String modelId, boolean isPrimary, boolean isAuth) throws Exception {
@@ -1067,12 +1179,16 @@ public class ClientModelManager {
     }
 
     private static void onSyncComplete() {
+        NetworkOnlineDebugLog.info("onSyncComplete: selectedModelId={} selectedTextureId={} assemblyMapSize={}",
+                selectedModelId, selectedTextureId, modelAssemblyMap.size());
         syncStep = 1;
         serverModels.clear();
         cachedModelHashes.clear();
 
         ((Executor) Minecraft.getInstance()).execute(() -> {
             syncState.setState(SyncState.IDLE);
+            NetworkOnlineDebugLog.info("onSyncComplete: calling resendSelectedServerModel");
+            resendSelectedServerModel();
             forEachGuiWidget(IGuiWidget::onSyncComplete);
         });
     }

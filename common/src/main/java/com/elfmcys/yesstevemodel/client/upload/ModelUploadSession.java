@@ -143,6 +143,7 @@ public final class ModelUploadSession {
         if (status == 0) {
             s.state = State.COMPLETED;
             s.message = Component.translatable("gui.yes_steve_model.import.state.imported_as", modelId);
+            ClientModelManager.onUploadedModelAvailable(modelId);
         } else {
             s.fail(appendServerMessage(getResponseErrorText(status), message));
         }

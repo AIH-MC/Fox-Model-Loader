@@ -1,4 +1,6 @@
 {
+  "gui.yes_steve_model.config.network_online_debug_log": "\u7f51\u7edc\u8054\u673a\u8c03\u8bd5\u65e5\u5fd7",
+  "gui.yes_steve_model.config.network_online_debug_log.desc": "\u8f93\u51fa\u5ba2\u6237\u7aef/\u670d\u52a1\u7aef\u6a21\u578b\u8054\u673a\u540c\u6b65\u7684\u8be6\u7ec6\u65e5\u5fd7\u3002\u4ec5\u5efa\u8bae\u6392\u67e5\u591a\u4eba\u540c\u6b65\u95ee\u9898\u65f6\u5f00\u542f\u3002",
   "key.category.yes_steve_model": "绯绯狐的模型加载器",
   "key.category.yes_steve_model.keys": "绯绯狐的模型加载器",
   "gui.yes_steve_model.close": "关闭",

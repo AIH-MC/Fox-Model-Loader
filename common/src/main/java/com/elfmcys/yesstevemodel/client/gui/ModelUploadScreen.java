@@ -5,6 +5,7 @@ import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
 import com.elfmcys.yesstevemodel.client.upload.ModelImportFilePicker;
 import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
+import com.elfmcys.yesstevemodel.util.ModelIdUtil;
 import com.elfmcys.yesstevemodel.util.PlatformUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -21,13 +22,11 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 public class ModelUploadScreen extends Screen implements ModelUploadSession.Listener {
     private static final long MODEL_FOLDER_POLL_INTERVAL_MS = 1000L;
     private static final long MODEL_FOLDER_POLL_WINDOW_MS = 60000L;
-    private static final Pattern INVALID_MODEL_ID_CHARS = Pattern.compile("[^a-z0-9_./-]+");
     private final Screen parentScreen;
     private final Queue<ModelImportFilePicker.PickedFile> pendingImports = new ArrayDeque<>();
     private long lastFlashTime = 0L;
@@ -203,15 +202,7 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
     }
 
     private static String normalizeModelId(String text) {
-        String normalized = text == null ? "" : text.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
-        while (normalized.startsWith("/")) {
-            normalized = normalized.substring(1);
-        }
-        normalized = INVALID_MODEL_ID_CHARS.matcher(normalized).replaceAll("_").replaceAll("/+", "/");
-        while (normalized.contains("..")) {
-            normalized = normalized.replace("..", ".");
-        }
-        return stripImportExtension(normalized);
+        return stripImportExtension(ModelIdUtil.normalizeImportModelId(text));
     }
 
     private void startNextImportIfIdle() {

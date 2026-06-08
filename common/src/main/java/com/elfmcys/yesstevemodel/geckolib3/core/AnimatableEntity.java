@@ -1,7 +1,6 @@
 package com.elfmcys.yesstevemodel.geckolib3.core;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
-import com.elfmcys.yesstevemodel.client.animation.ControllerActionResolver;
 import com.elfmcys.yesstevemodel.client.animation.debug.AnimationFrameProfiler;
 import com.elfmcys.yesstevemodel.audio.IAudioStreamFactory;
 import com.elfmcys.yesstevemodel.client.event.ClientTickEvent;
@@ -258,13 +257,20 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
             if (playerCapability != null && playerCapability.hasRenderState()) {
                 limbSwingAmount = playerCapability.getRenderStateWalkAnimationSpeed();
                 limbSwing = playerCapability.getRenderStateWalkAnimationPos();
-                if (!playerCapability.isLocalPlayerModel() && Math.abs(limbSwingAmount) <= ControllerActionResolver.MIN_MOVEMENT_SPEED) {
-                    limbSwingAmount = 0.0f;
-                    renderStateMovementSuppressed = true;
-                }
             } else {
                 limbSwingAmount = livingEntity.walkAnimation.speed(partialTick);
                 limbSwing = livingEntity.walkAnimation.position(partialTick);
+            }
+            if (playerCapability != null && !playerCapability.isLocalPlayerModel()) {
+                float physicalSpeed = MovementQuery.getPhysicalGroundSpeed(entity, this.positionTracker);
+                if (physicalSpeed > MovementQuery.EPSILON) {
+                    limbSwingAmount = physicalSpeed;
+                    limbSwing = this.seekTime * 0.6662f;
+                    renderStateMovementSuppressed = false;
+                } else {
+                    limbSwingAmount = 0.0f;
+                    renderStateMovementSuppressed = true;
+                }
             }
             if (!renderStateMovementSuppressed && limbSwingAmount <= 1.0E-4f) {
                 float movementSpeed = Mth.clamp(MovementQuery.getGroundSpeed(entity, this.positionTracker, null), 0.0f, 1.0f);

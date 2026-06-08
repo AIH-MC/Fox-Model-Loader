@@ -127,6 +127,16 @@ public class PlayerEntityFrameState extends LivingEntityFrameState<Player> {
         return this.forwardInput;
     }
 
+    public boolean isLocalPlayer() {
+        return this.isLocalPlayer;
+    }
+
+    public boolean hasMovementInput() {
+        return Math.abs(this.strafeInput) > 1.0E-4f
+                || Math.abs(this.verticalInput) > 1.0E-4f
+                || Math.abs(this.forwardInput) > 1.0E-4f;
+    }
+
     public boolean isShieldBlocking() {
         return this.isShieldBlocking;
     }
