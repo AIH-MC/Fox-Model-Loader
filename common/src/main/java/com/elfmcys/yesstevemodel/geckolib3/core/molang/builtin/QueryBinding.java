@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.geckolib3.core.molang.builtin;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.geckolib3.core.controller.AnimationControllerContext;
 import com.elfmcys.yesstevemodel.audio.PlaybackFlags;
 import rip.ysm.compat.cosmeticarmorreworked.CosmeticArmorHelper;
@@ -10,7 +11,7 @@ import com.elfmcys.yesstevemodel.geckolib3.core.molang.binding.ContextBinding;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.builtin.query.*;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.context.IContext;
 import com.elfmcys.yesstevemodel.geckolib3.util.MolangUtils;
-import com.elfmcys.yesstevemodel.geckolib3.core.EntityFrameStateTracker;
+import com.elfmcys.yesstevemodel.geckolib3.util.MovementQuery;
 import com.elfmcys.yesstevemodel.util.CameraUtil;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -24,7 +25,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.UseAnim;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.Optional;
 
@@ -66,7 +66,7 @@ public class QueryBinding extends ContextBinding {
         entityVar("distance_from_camera", ctx -> ctx.mc().gameRenderer.getMainCamera().getPosition().distanceTo(ctx.entity().position()));
         entityVar("eye_target_x_rotation", ctx -> ctx.entity().getViewXRot(ctx.animationEvent().getPartialTick()));
         entityVar("eye_target_y_rotation", ctx -> ctx.entity().getViewYRot(ctx.animationEvent().getPartialTick()));
-        entityVar("ground_speed", ctx -> getGroundSpeed(ctx.entity()));
+        entityVar("ground_speed", ctx -> MovementQuery.getGroundSpeed(ctx.entity(), ctx.geoInstance().getPositionTracker(), ctx.animationEvent()));
         entityVar("modified_distance_moved", ctx -> ctx.entity().walkDist);
         entityVar("vertical_speed", QueryBinding::getVerticalSpeed);
         entityVar("walk_distance", ctx -> ctx.entity().moveDist);
@@ -90,10 +90,13 @@ public class QueryBinding extends ContextBinding {
         livingEntityVar("is_eating", ctx -> ctx.entity().getUseItem().getUseAnimation() == UseAnim.EAT);
         livingEntityVar("is_playing_dead", ctx -> ctx.entity().isDeadOrDying());
         livingEntityVar("is_sleeping", ctx -> ctx.entity().isSleeping());
-        livingEntityVar("is_using_item", ctx -> ctx.entity().isUsingItem());
-        livingEntityVar("item_in_use_duration", ctx -> ctx.entity().getTicksUsingItem() / 20.0d);
+        livingEntityVar("is_using_item", ctx -> InputStateKey.isUsingItem(ctx.entity(), InputStateKey.getUsedItemHand(ctx.entity())));
+        livingEntityVar("item_in_use_duration", ctx -> InputStateKey.getTicksUsingItem(ctx.entity()) / 20.0d);
         livingEntityVar("item_max_use_duration", ctx -> getItemMaxUseDuration(ctx.entity()) / 20.0d);
-        livingEntityVar("item_remaining_use_duration", ctx -> ctx.entity().getUseItemRemainingTicks() / 20.0d);
+        livingEntityVar("item_remaining_use_duration", ctx -> getItemRemainingUseDuration(ctx.entity()) / 20.0d);
+        livingEntityVar("is_swinging", QueryBinding::isSwinging);
+        livingEntityVar("swing_time", ctx -> getSwingTime(ctx) / 20.0d);
+        livingEntityVar("attack_time", QueryBinding::getAttackTime);
         livingEntityVar("equipment_count", ctx -> getEquipmentCount(ctx.entity()));
 
         playerEntityVar("cape_flap_amount", QueryBinding::getCapeFlapAmount);
@@ -109,6 +112,43 @@ public class QueryBinding extends ContextBinding {
 
     private static Optional<PlaybackFlags> getPlaybackFlags(IContext<?> context) {
         return Optional.ofNullable(context.getPlaybackFlags());
+    }
+
+    private static int getItemRemainingUseDuration(LivingEntity entity) {
+        if (entity.isUsingItem()) {
+            return entity.getUseItemRemainingTicks();
+        }
+        return InputStateKey.isUsingItem(entity, InputStateKey.getUsedItemHand(entity)) ? Math.max(1, 6 - InputStateKey.getTicksUsingItem(entity)) : 0;
+    }
+
+    private static boolean isSwinging(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.isLocalAnyHandSwinging()) {
+            return true;
+        }
+        return InputStateKey.isAnyHandSwinging(context.entity());
+    }
+
+    private static float getSwingTime(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0) {
+            return Math.max(1.0f, InputStateKey.getLocalSwingPulseAge() + context.animationEvent().getFrameTime());
+        }
+        return InputStateKey.getSwingTicks(context.entity(), context.animationEvent().getFrameTime());
+    }
+
+    private static float getAttackTime(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0
+                && InputStateKey.getLocalSwingingHand() == net.minecraft.world.InteractionHand.MAIN_HAND) {
+            return Math.min(1.0f, getSwingTime(context) / 6.0f);
+        }
+        return InputStateKey.getAttackProgress(context.entity(), context.animationEvent().getFrameTime());
+    }
+
+    private static boolean isLocalPlayerModel(IContext<? extends LivingEntity> context) {
+        return context.geoInstance() instanceof PlayerCapability cap && cap.isLocalPlayerModel();
+    }
+
+    private static boolean isLocalSwingTarget(IContext<? extends LivingEntity> context) {
+        return isLocalPlayerModel(context) || context.entity() instanceof Player;
     }
 
     private static boolean isFlying(IContext<Player> context) {
@@ -177,17 +217,11 @@ public class QueryBinding extends ContextBinding {
         if (context.entity() instanceof LocalPlayer) {
             return PlayerEntityFrameState.getHeadYawDelta();
         }
-        return 20.0f * (context.entity().getYRot() - context.entity().yRotO);
-    }
-
-    private static float getGroundSpeed(Entity entity) {
-        Vec3 deltaMovement = entity.getDeltaMovement();
-        return 20.0f * Mth.sqrt((float) ((deltaMovement.x * deltaMovement.x) + (deltaMovement.z * deltaMovement.z)));
+        return 20.0f * Mth.wrapDegrees(context.entity().getYRot() - context.entity().yRotO);
     }
 
     private static float getVerticalSpeed(IContext<Entity> context) {
-        EntityFrameStateTracker<?> positionTracker = context.geoInstance().getPositionTracker();
-        return (20.0f * ((float) positionTracker.getPositionDelta().y)) / positionTracker.getTimeDelta();
+        return MovementQuery.getVerticalSpeed(context.entity(), context.geoInstance().getPositionTracker());
     }
 
     private static float getCapeFlapAmount(IContext<Player> context) {

@@ -10,7 +10,6 @@ import com.elfmcys.yesstevemodel.util.log.ChatLogger;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.renderer.LightTexture;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -28,6 +27,8 @@ import java.nio.IntBuffer;
 import java.util.Arrays;
 
 public class NativeModelRenderer {
+    private static final int FULL_BRIGHT_LIGHT = 0xF000F0;
+
     private static final Matrix4f projectionModelViewMatrix = new Matrix4f();
     private static final ThreadLocal<RenderScratch> FALLBACK_SCRATCH = ThreadLocal.withInitial(RenderScratch::new);
 
@@ -51,7 +52,7 @@ public class NativeModelRenderer {
                     stateBuffer,
                     textureIndex,
                     renderPartMask,
-                    packedLight,
+                    FULL_BRIGHT_LIGHT,
                     packedOverlay,
                     red, green, blue, alpha,
                     true
@@ -170,16 +171,16 @@ public class NativeModelRenderer {
             globalBoneMat.set(rootPoseMat).mul(localBoneMat);
             projBoneMat.set(projMat).mul(globalBoneMat);
 
-            // 当骨骼变换被镜像(行列式为负, 如原版物品栏预览把 -Z 翻转放进 pose)时, 屏幕空间绕序翻转,
-            // 这里基于投影绕序的手动背面剔除会剔错面、导致模型残缺(GUI 左侧预览破损)。
-            // 由于模型使用 NoCull 渲染类型, 仅靠深度测试即可正确显示, 故镜像情况下跳过手动剔除。
-            boolean cullFaces = globalBoneMat.determinant3x3() >= 0.0f;
+            // GUI previews keep the -Z mirror in the local PoseStack. Use the
+            // screen-space culler there to avoid drawing cutout back faces while
+            // preserving the old determinant guard for world rendering.
+            boolean cullFaces = isPreview || globalBoneMat.determinant3x3() >= 0.0f;
 
             // 法線全域矩陣
             localBoneMat.normal(localNormalMat);
             globalNormalMat.set(rootNormalMC).mul(localNormalMat);
 
-            int currentPackedLight = bone.glow ? LightTexture.pack(15, 15) : packedLight;
+            int currentPackedLight = isPreview || bone.glow ? FULL_BRIGHT_LIGHT : packedLight;
 
             for (GeoModel.BakedCube cube : bone.cubes) {
                 for (GeoModel.BakedQuad quad : cube.quads) {

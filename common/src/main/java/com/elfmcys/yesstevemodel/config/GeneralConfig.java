@@ -48,6 +48,8 @@ public class GeneralConfig {
 
     public static ForgeConfigSpec.BooleanValue ANIMATION_DEBUG_LOG;
 
+    public static ForgeConfigSpec.BooleanValue INPUT_STATE_DEBUG_LOG;
+
     public static ForgeConfigSpec.BooleanValue WARN_REPEATED_ANIMATION_EVALUATION;
 
     public static ForgeConfigSpec.BooleanValue RESOURCE_STATION_MONITOR_LOG;
@@ -55,6 +57,8 @@ public class GeneralConfig {
     public static ForgeConfigSpec.BooleanValue NETWORK_ONLINE_DEBUG_LOG;
 
     public static ForgeConfigSpec.BooleanValue MODEL_MEMORY_PROFILER;
+
+    public static ForgeConfigSpec.BooleanValue MODEL_IMPORT_PERFORMANCE_LOG;
 
     public static ForgeConfigSpec.BooleanValue RELEASE_TEXTURE_BYTES_AFTER_UPLOAD;
 
@@ -158,6 +162,8 @@ public class GeneralConfig {
         ANIMATION_FRAME_PROFILER = builder.define("AnimationFrameProfiler", false);
         builder.comment("Verbose per-evaluation [YSM-ANIM] debug log. Very noisy, default off.");
         ANIMATION_DEBUG_LOG = builder.define("AnimationDebugLog", false);
+        builder.comment("Print [YSM-INPUT] diagnostics for attack/use mouse clicks, key state, vanilla swing/use state, and local animation pulses.");
+        INPUT_STATE_DEBUG_LOG = builder.define("InputStateDebugLog", false);
         builder.comment("Warn when the same entity is fully evaluated more than once in a single render frame.");
         WARN_REPEATED_ANIMATION_EVALUATION = builder.define("WarnRepeatedAnimationEvaluation", true);
         builder.comment("Reduce animation update rates for distant entities. Disabled by default for smoother animation.");
@@ -168,6 +174,8 @@ public class GeneralConfig {
         NETWORK_ONLINE_DEBUG_LOG = builder.define("NetworkOnlineDebugLog", false);
         builder.comment("Model memory profiler for read/decrypt/parse/texture/GPU/LRU checkpoints. Default off.");
         MODEL_MEMORY_PROFILER = builder.define("ModelMemoryProfiler", false);
+        builder.comment("Print [YSM][Perf] timing logs for model import, upload, and reload checkpoints. Default off.");
+        MODEL_IMPORT_PERFORMANCE_LOG = builder.define("ModelImportPerformanceLog", false);
         builder.comment("Release Java texture byte arrays after successful GPU upload. Default off.");
         RELEASE_TEXTURE_BYTES_AFTER_UPLOAD = builder.define("ReleaseTextureBytesAfterUpload", false);
         builder.comment("Maximum models whose GPU/native render caches stay resident. 0 disables LRU trimming.");

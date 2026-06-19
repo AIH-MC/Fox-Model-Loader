@@ -56,8 +56,8 @@ public class S2CSetModelAndTexturePacket {
             boolean keepLocalOnlyModel = entity == localPlayer && ClientModelManager.isSelectedLocalOnlyModel(cap.getModelId());
             if (!keepLocalOnlyModel) {
                 cap.initModelWithTexture(other.modelId, other.textureId);
-                cap.setForceDisabled(other.disabled);
             }
+            cap.setForceDisabled(other.disabled);
             S2CSyncPlayerStatePacket.handleCapability(entity, other.entityModelSync);
         });
     }

@@ -28,19 +28,23 @@ import net.minecraft.world.entity.player.Player;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 
 public final class CapabilityEvent {
-    private static final int TRACKING_MODEL_RESYNC_INTERVAL_TICKS = 100;
+    private static final ConcurrentMap<UUID, ConcurrentMap<UUID, String>> SYNCED_PLAYER_MODEL_STATES = new ConcurrentHashMap<>();
 
     private CapabilityEvent() {
     }
 
     public static void register() {
         PlayerEvent.PLAYER_CLONE.register(CapabilityEvent::onPlayerCloned);
+        PlayerEvent.PLAYER_QUIT.register(CapabilityEvent::onPlayerQuit);
         EntityEvent.ADD.register(CapabilityEvent::onEntityAdd);
         TickEvent.SERVER_POST.register(CapabilityEvent::onServerTick);
     }
@@ -71,9 +75,22 @@ public final class CapabilityEvent {
         });
     }
 
+    private static void onPlayerQuit(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        SYNCED_PLAYER_MODEL_STATES.remove(playerId);
+        SYNCED_PLAYER_MODEL_STATES.values().forEach(states -> states.remove(playerId));
+    }
+
+    public static void forgetSyncedModelStates(ServerPlayer receiver) {
+        SYNCED_PLAYER_MODEL_STATES.remove(receiver.getUUID());
+    }
+
     private static EventResult onEntityAdd(Entity entity, Level level) {
         if (!YesSteveModel.isAvailable()) {
             return EventResult.pass();
+        }
+        if (!level.isClientSide() && entity instanceof Projectile projectile && projectile.getOwner() instanceof ServerPlayer owner) {
+            syncProjectileModel(projectile, owner);
         }
         if (entity instanceof ServerPlayer player) {
             getAuthModelsCap(player).ifPresent(authModelsCap -> {
@@ -107,17 +124,18 @@ public final class CapabilityEvent {
 
     public static void syncPlayerModelToTracking(ServerPlayer player, boolean resetMessage) {
         getModelInfoCap(player).ifPresent(modelInfoCap -> {
-            if (!canSyncModel(player, modelInfoCap)) {
-                NetworkOnlineDebugLog.info("syncToTracking: SKIP not_connected player={}", player.getName().getString());
-                modelInfoCap.markDirty();
-                return;
-            }
+                if (!canSyncModel(player, modelInfoCap)) {
+                    NetworkOnlineDebugLog.info("syncToTracking: SKIP not_connected player={}", player.getName().getString());
+                    modelInfoCap.markDirty();
+                    return;
+                }
             NetworkOnlineDebugLog.info("syncToTracking: {} modelId={} reset={}",
                     player.getName().getString(), modelInfoCap.getModelId(), resetMessage);
             modelInfoCap.createSyncMessage(player, resetMessage).ifPresentOrElse(
                     message -> {
                         NetworkOnlineDebugLog.info("syncToTracking: SENDING packet to {}", player.getName().getString());
                         NetworkHandler.sendToTrackingEntityAndSelf(message, player);
+                        rememberTrackedPlayerModelState(player, modelInfoCap);
                     },
                     () -> {
                         NetworkOnlineDebugLog.info("syncToTracking: EMPTY -> markDirty");
@@ -136,7 +154,10 @@ public final class CapabilityEvent {
                 if (!canSyncModel(player, modelInfoCap)) {
                     return;
                 }
-                modelInfoCap.createSyncMessage(player, false).ifPresent(message -> NetworkHandler.sendToClientPlayer(message, receiver));
+                modelInfoCap.createSyncMessage(player, false).ifPresent(message -> {
+                    NetworkHandler.sendToClientPlayer(message, receiver);
+                    rememberModelState(player, receiver, buildModelStateKey(modelInfoCap));
+                });
             });
         }
     }
@@ -164,18 +185,72 @@ public final class CapabilityEvent {
                     cap.createSyncMessage(serverPlayer, true).ifPresent(message -> {
                         cap.clearDirty();
                         NetworkHandler.sendToTrackingEntityAndSelf(message, serverPlayer);
+                        rememberTrackedPlayerModelState(serverPlayer, cap);
                         if (serverPlayer.getVehicle() != null && serverPlayer.getVehicle().getFirstPassenger() == serverPlayer) {
                             syncVehicleModel(serverPlayer.getVehicle(), serverPlayer);
                         }
                     });
                 } else {
                     cap.getAnimSync().updateAndSync(serverPlayer, true, bool);
-                    if (serverPlayer.tickCount % TRACKING_MODEL_RESYNC_INTERVAL_TICKS == 0) {
-                        syncPlayerModelToTracking(serverPlayer, false);
-                    }
                 }
+                syncTrackedPlayerModelState(serverPlayer, cap);
             });
         }
+    }
+
+    private static void syncTrackedPlayerModelState(ServerPlayer source, ModelInfoCapability cap) {
+        MinecraftServer server = source.serverLevel().getServer();
+        if (server == null) {
+            return;
+        }
+        String stateKey = buildModelStateKey(cap);
+        for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+            if (receiver == source) {
+                continue;
+            }
+            sendModelStateIfNeeded(source, cap, receiver, stateKey);
+        }
+        sendModelStateIfNeeded(source, cap, source, stateKey);
+    }
+
+    private static void sendModelStateIfNeeded(ServerPlayer source, ModelInfoCapability cap, ServerPlayer receiver, String stateKey) {
+        if (!NetworkHandler.isPlayerConnected(receiver)) {
+            return;
+        }
+        UUID sourceId = source.getUUID();
+        ConcurrentMap<UUID, String> states = SYNCED_PLAYER_MODEL_STATES.computeIfAbsent(receiver.getUUID(), uuid -> new ConcurrentHashMap<>());
+        if (stateKey.equals(states.get(sourceId))) {
+            return;
+        }
+        cap.createSyncMessage(source, true).ifPresent(message -> {
+            NetworkHandler.sendToClientPlayer(message, receiver);
+            states.put(sourceId, stateKey);
+        });
+    }
+
+    private static void rememberTrackedPlayerModelState(ServerPlayer source, ModelInfoCapability cap) {
+        MinecraftServer server = source.serverLevel().getServer();
+        if (server == null) {
+            return;
+        }
+        String stateKey = buildModelStateKey(cap);
+        for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+            if (receiver == source) {
+                continue;
+            }
+            rememberModelState(source, receiver, stateKey);
+        }
+        rememberModelState(source, source, stateKey);
+    }
+
+    private static void rememberModelState(ServerPlayer source, ServerPlayer receiver, String stateKey) {
+        if (NetworkHandler.isPlayerConnected(receiver)) {
+            SYNCED_PLAYER_MODEL_STATES.computeIfAbsent(receiver.getUUID(), uuid -> new ConcurrentHashMap<>()).put(source.getUUID(), stateKey);
+        }
+    }
+
+    private static String buildModelStateKey(ModelInfoCapability cap) {
+        return cap.getModelId() + "\0" + cap.getSelectTexture() + "\0" + cap.isDisabled();
     }
 
     public static void syncProjectileModel(Projectile projectile, ServerPlayer serverPlayer) {
@@ -185,7 +260,9 @@ public final class CapabilityEvent {
             }
             ProjectileModelCapability.get(projectile).ifPresent(projectileModelCap -> modelInfoCap.withMolangVars(object2FloatOpenHashMap -> {
                 projectileModelCap.setModel(modelInfoCap.getModelId(), object2FloatOpenHashMap);
-                NetworkHandler.sendToTrackingEntity(new S2CSyncProjectileModelPacket(projectile.getId(), projectileModelCap), projectile);
+                S2CSyncProjectileModelPacket packet = new S2CSyncProjectileModelPacket(projectile.getId(), projectileModelCap);
+                NetworkHandler.sendToClientPlayer(packet, serverPlayer);
+                NetworkHandler.sendToTrackingEntity(packet, projectile);
             }));
         });
     }

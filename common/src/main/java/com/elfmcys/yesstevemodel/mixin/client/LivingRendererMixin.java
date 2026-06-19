@@ -19,6 +19,8 @@ public abstract class LivingRendererMixin extends EntityRenderer<LivingEntity> i
     @Override
     @Unique
     public void tlm$renderNameTag(LivingEntity pEntity, float pEntityYaw, float pPartialTick, PoseStack pPoseStack, MultiBufferSource pBuffer, int pPackedLight) {
-        super.render(pEntity, pEntityYaw, pPartialTick, pPoseStack, pBuffer, pPackedLight);
+        if (this.shouldShowName(pEntity)) {
+            this.renderNameTag(pEntity, pEntity.getDisplayName(), pPoseStack, pBuffer, pPackedLight, pPartialTick);
+        }
     }
 }

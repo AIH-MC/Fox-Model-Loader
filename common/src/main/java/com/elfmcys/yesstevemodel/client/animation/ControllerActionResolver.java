@@ -138,7 +138,7 @@ public final class ControllerActionResolver {
         if (state.onGround() && state.crouching()) {
             return SNEAKING;
         }
-        if (state.onGround() && state.sprinting()) {
+        if (state.onGround() && state.sprinting() && state.moving()) {
             return RUN;
         }
         if (state.onGround() && state.moving()) {

@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.geckolib3.util;
 
+import com.elfmcys.yesstevemodel.client.entity.PlayerEntityFrameState;
 import com.elfmcys.yesstevemodel.geckolib3.core.EntityFrameStateTracker;
 import com.elfmcys.yesstevemodel.geckolib3.core.event.predicate.AnimationEvent;
 import net.minecraft.util.Mth;
@@ -30,6 +31,10 @@ public final class MovementQuery {
             return trackerDelta;
         }
 
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            return Vec3.ZERO;
+        }
+
         Vec3 tickDelta = sanitize(new Vec3(entity.getX() - entity.xo, entity.getY() - entity.yo, entity.getZ() - entity.zo));
         if (hasMovement(tickDelta)) {
             return tickDelta;
@@ -48,6 +53,10 @@ public final class MovementQuery {
         float trackerSpeed = getHorizontalSpeedFromDelta(trackerDelta, tracker);
         if (isUsable(trackerSpeed)) {
             return trackerSpeed;
+        }
+
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            return 0.0f;
         }
 
         if (event != null) {
@@ -81,6 +90,10 @@ public final class MovementQuery {
         float trackerSpeed = getHorizontalSpeedFromDelta(trackerDelta, tracker);
         if (isUsable(trackerSpeed)) {
             return trackerSpeed;
+        }
+
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            return 0.0f;
         }
 
         Vec3 deltaMovement = sanitize(entity.getDeltaMovement());
@@ -117,6 +130,11 @@ public final class MovementQuery {
     }
 
     public static float getDeltaMovementLength(Entity entity, EntityFrameStateTracker<?> tracker) {
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            Vec3 trackerDelta = sanitize(tracker.getPositionDelta());
+            return hasMovement(trackerDelta) ? (float) trackerDelta.length() : 0.0f;
+        }
+
         Vec3 deltaMovement = sanitize(entity.getDeltaMovement());
         if (hasMovement(deltaMovement)) {
             return (float) deltaMovement.length();
@@ -142,6 +160,11 @@ public final class MovementQuery {
 
     private static boolean isUsable(float value) {
         return Float.isFinite(value) && value > EPSILON;
+    }
+
+    private static boolean shouldSuppressSyntheticWalk(EntityFrameStateTracker<?> tracker) {
+        return tracker instanceof PlayerEntityFrameState playerState
+                && !playerState.isLocalPlayer();
     }
 
     private static Vec3 sanitize(Vec3 vec3) {

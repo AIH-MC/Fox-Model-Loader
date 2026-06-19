@@ -11,6 +11,7 @@ import com.elfmcys.yesstevemodel.client.gui.button.*;
 import com.elfmcys.yesstevemodel.client.input.PlayerModelToggleKey;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
 import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
+import com.elfmcys.yesstevemodel.client.renderer.RendererManager;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.config.ServerConfig;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.util.StringPool;
@@ -24,6 +25,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.systems.RenderSystem;
 import dev.architectury.platform.Platform;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -363,31 +365,28 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                 navigateUp();
             }).setTooltipText("gui.back"));
         }
-        Component showIdFirstLabel = Component.translatable("gui.yes_steve_model.show_model_id_first");
-        addRenderableWidget(Checkbox.builder(showIdFirstLabel, font).pos(this.guiLeft + 5, this.guiTop - 22).maxWidth(125).selected(GeneralConfig.SHOW_MODEL_ID_FIRST.get()).onValueChange((c, v) -> {
+        addRenderableWidget(Checkbox.builder(Component.translatable("gui.yes_steve_model.show_model_id_first"), font).pos(this.guiLeft + 5, this.guiTop - 18).maxWidth(125).selected(GeneralConfig.SHOW_MODEL_ID_FIRST.get()).onValueChange((c, v) -> {
             GeneralConfig.SHOW_MODEL_ID_FIRST.set(v);
             GeneralConfig.SHOW_MODEL_ID_FIRST.save();
         }).build());
-        FlatColorButton selectButton = new FlatColorButton(this.guiLeft + 132, this.guiTop - 22, 44, 14, Component.translatable("gui.yes_steve_model.model_select.select"), button -> {
+        IconButton selectButton = new IconButton(this.guiLeft + 132, this.guiTop - 20, 18, 18, 0, 48, button -> {
             this.selectionMode = !this.selectionMode;
-            if (this.selectionMode) {
-                this.selectionStatus = Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
-            } else {
+            if (!this.selectionMode) {
                 this.selectedModelIds.clear();
-                this.selectionStatus = Component.empty();
             }
             init();
         });
         selectButton.setSelected(this.selectionMode);
+        selectButton.setTooltipText("gui.yes_steve_model.model_select.tooltip.select");
         addRenderableWidget(selectButton);
-        addRenderableWidget(new IconButton(this.guiLeft + 328, this.guiTop + 5, 18, 18, 32, 0, button4 -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 324, this.guiTop + 5, 18, 18, 32, 0, button4 -> {
             if (this.category != Category.ALL) {
                 this.category = Category.ALL;
                 resetCurrentPage();
                 init();
             }
         }).setTooltipText("gui.yes_steve_model.all_models"));
-        addRenderableWidget(new IconButton(this.guiLeft + 308, this.guiTop + 5, 18, 18, 48, 0, button5 -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 306, this.guiTop + 5, 18, 18, 48, 0, button5 -> {
             if (this.category != Category.AUTH) {
                 this.category = Category.AUTH;
                 resetCurrentPage();
@@ -401,35 +400,36 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                 init();
             }
         }).setTooltipText("gui.yes_steve_model.star_models"));
-        addRenderableWidget(new IconButton(this.guiLeft + 397, this.guiTop + 5, 18, 18, 16, 16, button7 -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 396, this.guiTop + 5, 18, 18, 16, 16, button7 -> {
             Minecraft.getInstance().setScreen(new ExtraPlayerConfigScreen(this));
         }).setTooltipText("gui.yes_steve_model.config"));
-        IconButton importButton = new IconButton(this.guiLeft + 377, this.guiTop + 5, 18, 18, 0, 16, button8 -> {
+        IconButton importButton = new IconButton(this.guiLeft + 360, this.guiTop + 5, 18, 18, 0, 16, button8 -> {
             Minecraft.getInstance().setScreen(new ModelUploadScreen(this));
         });
-        importButton.setTooltipText("gui.yes_steve_model.import.tooltip");
+        importButton.setTooltipLines(java.util.Collections.singletonList(getImportTooltip()));
         addRenderableWidget(importButton);
-        addRenderableWidget(new IconButton(this.guiLeft + 357, this.guiTop + 5, 18, 18, 80, 0, button9 -> {
+        IconButton customFolderUploadButton = new IconButton(this.guiLeft + 378, this.guiTop + 5, 18, 18, 96, 16, btn -> {
+            Minecraft.getInstance().setScreen(new CustomFolderUploadScreen(this));
+        });
+        customFolderUploadButton.setTooltipLines(java.util.Collections.singletonList(getCustomFolderUploadTooltip()));
+        addRenderableWidget(customFolderUploadButton);
+        addRenderableWidget(new IconButton(this.guiLeft + 342, this.guiTop + 5, 18, 18, 80, 32, button9 -> {
             Minecraft.getInstance().setScreen(new ResourceStationScreen(this));
-        }).setTooltipText("gui.yes_steve_model.resource_station.open"));
-        addRenderableWidget(new IconButton(this.guiLeft + 397, this.guiTop + 27, 18, 18, 80, 16, button9 -> {
-            openCategoryManager();
-        }).setTooltipText("gui.yes_steve_model.model_select.category_manage"));
-        addRenderableWidget(new IconButton(this.guiLeft + 377, this.guiTop + 27, 18, 18, 64, 16, button9 -> {
-            Minecraft.getInstance().setScreen(new OpenModelFolderScreen(this));
-        }).setTooltipText("gui.yes_steve_model.open_model_folder.open"));
+        }).setTooltipText("gui.yes_steve_model.resource_station.tooltip"));
         if (this.selectionMode) {
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.delete"), button -> runDeleteSelection()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 41, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.move"), button -> runMoveSelection()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 77, this.guiTop + 253, 62, 14, Component.translatable("gui.yes_steve_model.model_select.new_category"), button -> openCreateCategoryDialog(null)));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 270, 62, 14, Component.translatable("gui.yes_steve_model.model_select.delete_category"), button -> runDeleteCategory()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 69, this.guiTop + 270, 48, 14, Component.translatable("gui.yes_steve_model.model_select.select_all"), button -> selectAllFilteredModels()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 119, this.guiTop + 270, 44, 14, Component.translatable("gui.yes_steve_model.model_select.cancel"), button -> {
+            int selectionToolbarX = this.guiLeft + 153;
+            int selectionToolbarY = this.guiTop - 19;
+            addRenderableWidget(new IconButton(selectionToolbarX, selectionToolbarY, 16, 16, 16, 48, button -> runDeleteSelection()).setTooltipText("gui.yes_steve_model.model_select.tooltip.delete"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 19, selectionToolbarY, 16, 16, 32, 48, button -> runMoveSelection()).setTooltipText("gui.yes_steve_model.model_select.tooltip.move"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 38, selectionToolbarY, 16, 16, 48, 48, button -> runCreateCategory()).setTooltipText("gui.yes_steve_model.model_select.tooltip.new_category"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 57, selectionToolbarY, 16, 16, 64, 48, button -> runRenameCategory()).setTooltipText("gui.yes_steve_model.model_select.tooltip.rename_category"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 76, selectionToolbarY, 16, 16, 80, 48, button -> runDeleteCategory()).setTooltipText("gui.yes_steve_model.model_select.tooltip.delete_category"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 95, selectionToolbarY, 16, 16, 96, 48, button -> selectAllFilteredModels()).setTooltipText("gui.yes_steve_model.model_select.tooltip.select_all"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 114, selectionToolbarY, 16, 16, 112, 48, button -> {
                 this.selectedModelIds.clear();
                 this.selectionMode = false;
-                this.selectionStatus = Component.empty();
                 init();
-            }));
+            }).setTooltipText("gui.yes_steve_model.model_select.tooltip.cancel"));
         }
         addRenderableWidget(new FlatColorButton(this.guiLeft + 198, this.guiTop + 215, 52, 14, Component.translatable("gui.yes_steve_model.pre_page"), button10 -> {
             int currentPage = getCurrentPage();
@@ -580,15 +580,42 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             return;
         }
         Component text = hasStatus ? this.selectionStatus : Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size());
-        List<FormattedCharSequence> lines = this.font.split(text.copy().withStyle(ChatFormatting.GRAY), 170);
+        List<FormattedCharSequence> lines = this.font.split(text.copy().withStyle(ChatFormatting.GRAY), 126);
         if (!lines.isEmpty()) {
-            guiGraphics.drawString(this.font, lines.get(0), this.guiLeft + 5, this.guiTop + 238, 0xFFF3F3E0);
+            guiGraphics.drawString(this.font, lines.get(0), this.guiLeft + 288, this.guiTop - 15, 0xFFF3F3E0);
         }
     }
 
     public void renderModelPreview(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         LocalPlayer localPlayer = Minecraft.getInstance().player;
         if (localPlayer != null) {
+            int previewLeft = this.guiLeft + 5;
+            int previewTop = this.guiTop + 29;
+            int previewRight = this.guiLeft + 130;
+            int previewBottom = this.guiTop + 200;
+            float customPreviewCenterX = (previewLeft + previewRight) * 0.5f;
+            boolean renderedCustomPreview = PlayerCapability.get(localPlayer).map(cap -> {
+                cap.tickModel();
+                if (!cap.isModelReady()) {
+                    return false;
+                }
+                guiGraphics.flush();
+                double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
+                RenderSystem.enableScissor(
+                        (int) (previewLeft * guiScale),
+                        (int) (Minecraft.getInstance().getWindow().getHeight() - (previewBottom * guiScale)),
+                        (int) ((previewRight - previewLeft) * guiScale),
+                        (int) ((previewBottom - previewTop) * guiScale)
+                );
+                try {
+                    ModelPreviewRenderer.renderLivingEntityPreview(customPreviewCenterX, previewTop + 150.0f, 70.0f, partialTick, cap, RendererManager.getPlayerRenderer(), false, false, ModelPreviewRenderer.FRONT_FACING_YAW, previewLeft, previewTop, previewRight, previewBottom, mouseX, mouseY);
+                } finally {
+                    RenderSystem.disableScissor();
+                }
+                guiGraphics.flush();
+                return true;
+            }).orElse(false);
+            if (!renderedCustomPreview) {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(0.0f, 0.0f, 100.0f);
             // 1.21.1 的签名为 (GuiGraphics, x1, y1, x2, y2, scale, yOffset, mouseX, mouseY, entity),
@@ -598,6 +625,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             float previewCenterY = this.guiTop + 114.5f;
             renderFrontFacingInventoryEntity(guiGraphics, this.guiLeft + 5, this.guiTop + 29, this.guiLeft + 130, this.guiTop + 200, 70, 0.0625f, previewCenterX, previewCenterY, mouseX, mouseY, localPlayer);
             guiGraphics.pose().popPose();
+            }
             PlayerCapability.get(localPlayer).ifPresent(cap -> {
                 List<FormattedCharSequence> listSplit = this.font.split(FormattedText.of(ClientModelManager.getModelContext(cap.getModelId()).map(it -> {
                     Metadata metadata2 = it.getModelData().getExtraInfo();
@@ -798,6 +826,43 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                 }))));
     }
 
+    private void runCreateCategory() {
+        if (!ModelPanelFileActions.canWriteServerModelDirectory()) {
+            showSelectionActionMessage(Component.translatable("gui.yes_steve_model.model_select.error.read_only"));
+            return;
+        }
+        Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.new_category_prompt"), StringPool.EMPTY, category -> {
+            String normalized = ModelPanelFileActions.normalizeCategory(category);
+            this.selectionStatus = ModelPanelFileActions.createCategory(normalized);
+            if (StringUtils.isNotBlank(normalized)) {
+                String path = normalized + "/";
+                this.modelPackMap.putIfAbsent(path, new ModelPackData(path, FileTypeUtil.getFinalPathSegment(path), StringPool.EMPTY, null, null));
+            }
+            init();
+        }));
+    }
+
+    private void runRenameCategory() {
+        if (!ModelPanelFileActions.canWriteServerModelDirectory()) {
+            showSelectionActionMessage(Component.translatable("gui.yes_steve_model.model_select.error.read_only"));
+            return;
+        }
+        Minecraft.getInstance().setScreen(new CategorySelectScreen(this, Component.translatable("gui.yes_steve_model.model_select.rename_category"), getKnownCategories(), oldCategory -> {
+            Minecraft.getInstance().setScreen(new CategoryNameDialogScreen(this, Component.translatable("gui.yes_steve_model.model_select.rename_category_prompt"), oldCategory, newCategory -> {
+                this.selectionStatus = ModelPanelFileActions.renameCategory(oldCategory, newCategory);
+                String oldPath = ModelPanelFileActions.normalizeCategory(oldCategory) + "/";
+                String newPath = ModelPanelFileActions.normalizeCategory(newCategory) + "/";
+                renameCachedCategory(oldPath, newPath);
+                if (currentPath.equals(oldPath)) {
+                    currentPath = newPath;
+                } else if (currentPath.startsWith(oldPath)) {
+                    currentPath = newPath + currentPath.substring(oldPath.length());
+                }
+                init();
+            }));
+        }, null));
+    }
+
     private void runDeleteCategory() {
         if (!ModelPanelFileActions.canWriteServerModelDirectory()) {
             showSelectionActionMessage(Component.translatable("gui.yes_steve_model.model_select.error.read_only"));
@@ -805,10 +870,11 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         }
         Minecraft.getInstance().setScreen(new CategorySelectScreen(this,
                 Component.translatable("gui.yes_steve_model.model_select.delete_category"),
-                ModelPanelFileActions.listCategories(),
+                getKnownCategories(),
                 category -> Minecraft.getInstance().setScreen(new CategoryDeleteConfirmScreen(this, category, deleteModels -> {
                     Component result = ModelPanelFileActions.deleteCategory(category, deleteModels);
                     String path = category.endsWith("/") ? category : category + "/";
+                    removeCachedCategory(ModelPanelFileActions.normalizeCategory(category) + "/");
                     if (currentPath.equals(path) || currentPath.startsWith(path)) {
                         currentPath = getParentPath(path);
                     }
@@ -816,6 +882,46 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                     showSelectionActionMessage(result);
                 })),
                 null));
+    }
+
+    private void renameCachedCategory(String oldPath, String newPath) {
+        Object2ReferenceOpenHashMap<String, ModelPackData> updated = new Object2ReferenceOpenHashMap<>();
+        this.modelPackMap.forEach((path, packData) -> {
+            if (path.equals(oldPath) || path.startsWith(oldPath)) {
+                String renamedPath = newPath + path.substring(oldPath.length());
+                updated.put(renamedPath, new ModelPackData(renamedPath, FileTypeUtil.getFinalPathSegment(renamedPath), packData.getDescription(), packData.getTexture(), packData.getTranslations()));
+            } else {
+                updated.put(path, packData);
+            }
+        });
+        this.modelPackMap.clear();
+        this.modelPackMap.putAll(updated);
+        pageIndexMap.removeInt(oldPath);
+    }
+
+    private void removeCachedCategory(String path) {
+        this.modelPackMap.keySet().removeIf(packPath -> packPath.equals(path) || packPath.startsWith(path));
+        pageIndexMap.keySet().removeIf(packPath -> packPath.equals(path) || packPath.startsWith(path));
+        if (currentPath.equals(path) || currentPath.startsWith(path)) {
+            currentPath = StringPool.EMPTY;
+        }
+    }
+
+    private List<String> getKnownCategories() {
+        TreeSet<String> categories = new TreeSet<>();
+        this.modelPackMap.keySet().forEach(path -> {
+            String normalized = ModelPanelFileActions.normalizeCategory(path);
+            if (StringUtils.isNotBlank(normalized)) {
+                categories.add(normalized);
+            }
+        });
+        this.sortedPackKeys.forEach(path -> {
+            String normalized = ModelPanelFileActions.normalizeCategory(path);
+            if (StringUtils.isNotBlank(normalized)) {
+                categories.add(normalized);
+            }
+        });
+        return Lists.newArrayList(categories);
     }
 
     private void showSelectionActionMessage(Component message) {
@@ -880,6 +986,26 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             return true;
         }
         return true;
+    }
+
+    private Component getImportTooltip() {
+        if (ClientModelManager.isAllowUpload() && ClientModelManager.isOysmServer()) {
+            return Component.translatable("gui.yes_steve_model.import.tooltip");
+        }
+        if (!ClientModelManager.isOysmServer()) {
+            return Component.translatable("gui.yes_steve_model.import.tooltip.waiting");
+        }
+        return Component.translatable("gui.yes_steve_model.import.tooltip.disabled");
+    }
+
+    private Component getCustomFolderUploadTooltip() {
+        if (ClientModelManager.isAllowUpload() && ClientModelManager.isOysmServer()) {
+            return Component.translatable("gui.yes_steve_model.upload_custom_folder.tooltip");
+        }
+        if (!ClientModelManager.isOysmServer()) {
+            return Component.translatable("gui.yes_steve_model.upload_custom_folder.tooltip.waiting");
+        }
+        return Component.translatable("gui.yes_steve_model.upload_custom_folder.tooltip.disabled");
     }
 
     private boolean handleToggleKey(int keyCode, int scanCode, int modifiers) {

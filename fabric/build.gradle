@@ -72,5 +72,5 @@ shadowJar {
 
 remapJar {
     input.set shadowJar.archiveFile
-    archiveFileName = 'fox-model-loader-1.2.3-fa1.21.1.jar'
+    archiveFileName = "fox-model-loader-${project.version}-fa1.21.1.jar"
 }

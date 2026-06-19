@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.upload;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.util.PerformanceProfiler;
 import dev.architectury.platform.Platform;
 import net.minecraft.network.chat.Component;
 
@@ -32,10 +33,10 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 public final class ModelImportFilePicker {
-    private static final String[] IMPORT_SUFFIXES = {"ysm", "zip", "7z"};
-    private static final String[] IMPORT_EXTENSIONS = {".ysm", ".zip", ".7z"};
-    private static final String FILE_FILTER_PATTERN = "*.ysm;*.zip;*.7z";
-    private static final String FILE_FILTER_DESCRIPTION = "YSM model (*.ysm, *.zip, *.7z)";
+    private static final String[] IMPORT_SUFFIXES = {"ysm", "zip"};
+    private static final String[] IMPORT_EXTENSIONS = {".ysm", ".zip"};
+    private static final String FILE_FILTER_PATTERN = "*.ysm;*.zip";
+    private static final String FILE_FILTER_DESCRIPTION = "YSM model (*.ysm, *.zip)";
     private static final int MAX_FOLDER_DEPTH = 16;
     private static final int MAX_FOLDER_FILE_COUNT = 4096;
     private static final int CLIPBOARD_OPEN = 2002;
@@ -775,7 +776,7 @@ public final class ModelImportFilePicker {
         intentClass.getMethod("addCategory", String.class).invoke(intent, getIntentCategory("CATEGORY_OPENABLE", "android.intent.category.OPENABLE"));
         intentClass.getMethod("setType", String.class).invoke(intent, "*/*");
         try {
-            intentClass.getMethod("putExtra", String.class, String[].class).invoke(intent, getIntentExtra("EXTRA_MIME_TYPES", "android.intent.extra.MIME_TYPES"), new String[]{"application/octet-stream", "application/zip", "application/x-7z-compressed", "application/x-zip-compressed"});
+            intentClass.getMethod("putExtra", String.class, String[].class).invoke(intent, getIntentExtra("EXTRA_MIME_TYPES", "android.intent.extra.MIME_TYPES"), new String[]{"application/octet-stream", "application/zip", "application/x-zip-compressed"});
         } catch (Throwable ignored) {
         }
         intentClass.getMethod("putExtra", String.class, boolean.class).invoke(intent, getIntentExtra("EXTRA_ALLOW_MULTIPLE", "android.intent.extra.ALLOW_MULTIPLE"), true);
@@ -898,12 +899,10 @@ public final class ModelImportFilePicker {
 
         java.nio.ByteBuffer ysmPattern = (java.nio.ByteBuffer) memUTF8.invoke(null, "*.ysm");
         java.nio.ByteBuffer zipPattern = (java.nio.ByteBuffer) memUTF8.invoke(null, "*.zip");
-        java.nio.ByteBuffer sevenZipPattern = (java.nio.ByteBuffer) memUTF8.invoke(null, "*.7z");
-        Object filters = memAllocPointer.invoke(null, 3);
+        Object filters = memAllocPointer.invoke(null, 2);
         try {
             pointerPut.invoke(filters, 0, ysmPattern);
             pointerPut.invoke(filters, 1, zipPattern);
-            pointerPut.invoke(filters, 2, sevenZipPattern);
             return (String) open.invoke(null,
                     Component.translatable("gui.yes_steve_model.import.title").getString(),
                     "",
@@ -916,7 +915,6 @@ public final class ModelImportFilePicker {
             } finally {
                 memFreeBuffer.invoke(null, ysmPattern);
                 memFreeBuffer.invoke(null, zipPattern);
-                memFreeBuffer.invoke(null, sevenZipPattern);
             }
         }
     }
@@ -1016,7 +1014,7 @@ public final class ModelImportFilePicker {
         try {
             Class<?> filterClass = Class.forName("javax.swing.filechooser.FileNameExtensionFilter");
             Object filter = filterClass.getConstructor(String.class, String[].class)
-                    .newInstance(FILE_FILTER_DESCRIPTION, new String[]{"ysm", "zip", "7z"});
+                    .newInstance(FILE_FILTER_DESCRIPTION, new String[]{"ysm", "zip"});
             chooserClass.getMethod("setFileFilter", Class.forName("javax.swing.filechooser.FileFilter")).invoke(chooser, filter);
         } catch (Throwable t) {
             rememberPickerProbe("Swing file filter unavailable: " + safeMessage(t));
@@ -1061,9 +1059,11 @@ public final class ModelImportFilePicker {
         String baseName = root.getFileName() == null ? "model" : root.getFileName().toString();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         AtomicInteger count = new AtomicInteger();
+        long perfStart = PerformanceProfiler.start();
         try (ZipOutputStream zip = new ZipOutputStream(out);
              Stream<Path> stream = Files.walk(root, MAX_FOLDER_DEPTH)) {
-            for (Path path : stream.filter(Files::isRegularFile).toList()) {
+            for (var iterator = stream.filter(Files::isRegularFile).iterator(); iterator.hasNext(); ) {
+                Path path = iterator.next();
                 Path normalized = path.toAbsolutePath().normalize();
                 if (!normalized.startsWith(root)) {
                     throw new IOException("Invalid path outside import folder: " + path);
@@ -1081,6 +1081,8 @@ public final class ModelImportFilePicker {
                 zip.closeEntry();
             }
         }
+        PerformanceProfiler.logElapsed("pack_directory", baseName, perfStart,
+                "files=" + count.get() + " bytes=" + out.size());
         return new PickedFile(baseName + ".zip", out.toByteArray());
     }
 
@@ -1284,7 +1286,8 @@ public final class ModelImportFilePicker {
         long fileCount = 0L;
         long totalSize = 0L;
         try (Stream<Path> paths = Files.walk(dir, MAX_FOLDER_DEPTH)) {
-            for (Path path : paths.filter(Files::isRegularFile).toList()) {
+            for (var iterator = paths.filter(Files::isRegularFile).iterator(); iterator.hasNext(); ) {
+                Path path = iterator.next();
                 fileCount++;
                 totalSize += Files.size(path);
                 newest = Math.max(newest, Files.getLastModifiedTime(path).toMillis());

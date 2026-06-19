@@ -41,41 +41,92 @@ public final class ModelPreviewRenderer {
 
     public static final float FRONT_FACING_YAW = 180.0f;
 
-    private static boolean isPreviewMode = false;
+    private static final float MODEL_PREVIEW_MOUSE_YAW_DEGREES = 25.0f;
 
-    private static boolean isExtraPlayerMode = false;
+    private static final float MODEL_PREVIEW_MOUSE_PITCH_DEGREES = 15.0f;
 
-    private static boolean isFirstPersonMode = false;
+    private static final float MODEL_PREVIEW_MOUSE_DEADZONE = 0.02f;
+
+    private static final float EXTRA_PLAYER_HEAD_YAW_LIMIT = 85.0f;
+
+    private static final PreviewMouseRotation NO_MOUSE_ROTATION = new PreviewMouseRotation(0.0f, 0.0f);
+
+    private static final double ANIMATION_PREVIEW_Z = 250.0d;
+
+    private static final double MODEL_PREVIEW_Z = 50.0d;
+
+    private static final ThreadLocal<Boolean> PREVIEW_MODE = ThreadLocal.withInitial(() -> false);
+
+    private static final ThreadLocal<Boolean> EXTRA_PLAYER_MODE = ThreadLocal.withInitial(() -> false);
+
+    private static final ThreadLocal<Boolean> FIRST_PERSON_MODE = ThreadLocal.withInitial(() -> false);
 
     private static boolean inventoryPreviewFrontFacing = false;
 
+    private static final class PreviewMouseRotation {
+        private final float yaw;
+        private final float pitch;
+
+        private PreviewMouseRotation(float yaw, float pitch) {
+            this.yaw = yaw;
+            this.pitch = pitch;
+        }
+    }
+
+    private static PreviewMouseRotation getPreviewMouseRotation(int left, int top, int right, int bottom, int mouseX, int mouseY, boolean disablePreviewRotation) {
+        if (disablePreviewRotation || right <= left || bottom <= top || mouseX == Integer.MIN_VALUE || mouseY == Integer.MIN_VALUE) {
+            return NO_MOUSE_ROTATION;
+        }
+        float centerX = (left + right) * 0.5f;
+        float centerY = (top + bottom) * 0.5f;
+        float halfWidth = Math.max(1.0f, (right - left) * 0.5f);
+        float halfHeight = Math.max(1.0f, (bottom - top) * 0.5f);
+        float normalizedYaw = applyPreviewMouseDeadzone(Mth.clamp((centerX - mouseX) / halfWidth, -1.0f, 1.0f));
+        float normalizedPitch = applyPreviewMouseDeadzone(Mth.clamp((centerY - mouseY) / halfHeight, -1.0f, 1.0f));
+        float yaw = normalizedYaw * MODEL_PREVIEW_MOUSE_YAW_DEGREES;
+        float pitch = normalizedPitch * MODEL_PREVIEW_MOUSE_PITCH_DEGREES;
+        return new PreviewMouseRotation(yaw, pitch);
+    }
+
+    private static float applyPreviewMouseDeadzone(float value) {
+        return Math.abs(value) < MODEL_PREVIEW_MOUSE_DEADZONE ? 0.0f : value;
+    }
+
+    private static float getExtraPlayerHeadYawOffset(LivingEntity entity) {
+        return Mth.clamp(Mth.wrapDegrees(entity.yHeadRot - entity.yBodyRot), -EXTRA_PLAYER_HEAD_YAW_LIMIT, EXTRA_PLAYER_HEAD_YAW_LIMIT);
+    }
+
+    private static float getExtraPlayerHeadYawOffsetO(LivingEntity entity) {
+        return Mth.clamp(Mth.wrapDegrees(entity.yHeadRotO - entity.yBodyRotO), -EXTRA_PLAYER_HEAD_YAW_LIMIT, EXTRA_PLAYER_HEAD_YAW_LIMIT);
+    }
+
     public static void setPreviewMode(boolean previewMode) {
-        isPreviewMode = previewMode;
+        PREVIEW_MODE.set(previewMode);
     }
 
     public static boolean isPreview() {
-        return isPreviewMode;
+        return PREVIEW_MODE.get();
     }
 
     public static void setExtraPlayerMode(boolean extraPlayerMode) {
-        isExtraPlayerMode = extraPlayerMode;
+        EXTRA_PLAYER_MODE.set(extraPlayerMode);
     }
 
     public static boolean isExtraPlayer() {
-        return isExtraPlayerMode;
+        return EXTRA_PLAYER_MODE.get();
     }
 
     public static void setFirstPersonMode(boolean firstPersonMode) {
-        isFirstPersonMode = firstPersonMode;
+        FIRST_PERSON_MODE.set(firstPersonMode);
     }
 
     public static boolean isFirstPerson() {
-        return isFirstPersonMode || OculusCompat.isPBRActive() || FirstPersonCompat.isFirstPersonActive();
+        return FIRST_PERSON_MODE.get() || OculusCompat.isPBRActive() || FirstPersonCompat.isFirstPersonActive();
     }
 
     public static boolean isFirstPersonOnRenderThread() {
         RenderSystem.assertOnRenderThread();
-        return isFirstPersonMode && !FirstPersonCompat.isFirstPersonActive();
+        return FIRST_PERSON_MODE.get() && !FirstPersonCompat.isFirstPersonActive();
     }
 
     public static void setInventoryPreviewFrontFacing(boolean frontFacing) {
@@ -114,15 +165,10 @@ public final class ModelPreviewRenderer {
     public static void renderEntityPreview(float x, float y, float scale, float pitch, float yaw, float partialTick, AnimatableEntity animatableEntity, GeoReplacedEntityRenderer renderer, boolean renderGround) {
         setPreviewMode(true);
         LivingEntity livingEntity = (LivingEntity) animatableEntity.getEntity();
-        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushMatrix();
-        modelViewStack.translate(x, y, 1250.0f);
-        modelViewStack.scale(1.0f, 1.0f, -1.0f);
-        RenderSystem.applyModelViewMatrix();
 
         PoseStack poseStack = new PoseStack();
-        poseStack.translate(0.0d, 0.0d, 1000.0d);
-        poseStack.scale(scale, scale, scale);
+        poseStack.translate(x, y, ANIMATION_PREVIEW_Z);
+        poseStack.scale(scale, scale, -scale);
         poseStack.translate(0.0d, 0.8d, 0.0d);
 
         Quaternionf rotationZ = Axis.ZP.rotationDegrees(180.0f);
@@ -184,10 +230,10 @@ public final class ModelPreviewRenderer {
             try {
                 renderVehicleForAnimation(yaw, animatableEntity, partialTick, poseStack, entityRenderDispatcher, bufferSource);
                 if (animationTracker.isCurrentAnimation("sleep")) {
-                    renderBedPreview(scale, pitch, yaw, bufferSource);
+                    renderBedPreview(x, y, scale, pitch, yaw, bufferSource);
                 }
                 if (renderGround) {
-                    renderGroundPreview(scale, pitch, yaw, bufferSource);
+                    renderGroundPreview(x, y, scale, pitch, yaw, bufferSource);
                 }
                 bufferSource.endBatch();
                 renderer.renderEntity((LivingAnimatable) animatableEntity, 0.0f, partialTick, poseStack, bufferSource, 15728880);
@@ -208,16 +254,14 @@ public final class ModelPreviewRenderer {
         livingEntity.yHeadRot = oldHeadRot;
         livingEntity.setPose(oldPose);
 
-        modelViewStack.popMatrix();
-        RenderSystem.applyModelViewMatrix();
         Lighting.setupFor3DItems();
         setPreviewMode(false);
     }
 
-    private static void renderBedPreview(float scale, float pitch, float yaw, MultiBufferSource.BufferSource bufferSource) {
+    private static void renderBedPreview(float x, float y, float scale, float pitch, float yaw, MultiBufferSource.BufferSource bufferSource) {
         PoseStack poseStack = new PoseStack();
-        poseStack.translate(0.0d, 0.0d, 1000.0d);
-        poseStack.scale(scale, scale, scale);
+        poseStack.translate(x, y, ANIMATION_PREVIEW_Z);
+        poseStack.scale(scale, scale, -scale);
         poseStack.translate(0.0d, 0.8d, 0.0d);
         Quaternionf rotationZ = Axis.ZP.rotationDegrees(180.0f);
         rotationZ.mul(Axis.XP.rotationDegrees((-10.0f) + pitch));
@@ -227,10 +271,10 @@ public final class ModelPreviewRenderer {
         Minecraft.getInstance().getBlockRenderer().renderSingleBlock(Blocks.RED_BED.defaultBlockState(), poseStack, bufferSource, 15728880, OverlayTexture.NO_OVERLAY);
     }
 
-    private static void renderGroundPreview(float scale, float pitch, float yaw, MultiBufferSource.BufferSource bufferSource) {
+    private static void renderGroundPreview(float x, float y, float scale, float pitch, float yaw, MultiBufferSource.BufferSource bufferSource) {
         PoseStack poseStack = new PoseStack();
-        poseStack.translate(0.0d, 0.0d, 1000.0d);
-        poseStack.scale(scale, scale, scale);
+        poseStack.translate(x, y, ANIMATION_PREVIEW_Z);
+        poseStack.scale(scale, scale, -scale);
         poseStack.translate(0.0d, 0.8d, 0.0d);
         Quaternionf rotationZ = Axis.ZP.rotationDegrees(180.0f);
         rotationZ.mul(Axis.XP.rotationDegrees((-10.0f) + pitch));
@@ -275,20 +319,33 @@ public final class ModelPreviewRenderer {
 
     // 模型预览页面
     public static <T extends LivingEntity, TAnimatable extends LivingAnimatable<T>> void renderLivingEntityPreview(float x, float y, float scale, float partialTick, TAnimatable animatable, GeoReplacedEntityRenderer<T, TAnimatable> renderer, boolean disablePreviewRotation, boolean hideEquipment) {
+        renderLivingEntityPreview(x, y, scale, partialTick, animatable, renderer, disablePreviewRotation, hideEquipment, FRONT_FACING_YAW);
+    }
+
+    public static <T extends LivingEntity, TAnimatable extends LivingAnimatable<T>> void renderLivingEntityPreview(float x, float y, float scale, float partialTick, TAnimatable animatable, GeoReplacedEntityRenderer<T, TAnimatable> renderer, boolean disablePreviewRotation, boolean hideEquipment, int left, int top, int right, int bottom, int mouseX, int mouseY) {
+        renderLivingEntityPreview(x, y, scale, partialTick, animatable, renderer, disablePreviewRotation, hideEquipment, FRONT_FACING_YAW, getPreviewMouseRotation(left, top, right, bottom, mouseX, mouseY, disablePreviewRotation));
+    }
+
+    public static <T extends LivingEntity, TAnimatable extends LivingAnimatable<T>> void renderLivingEntityPreview(float x, float y, float scale, float partialTick, TAnimatable animatable, GeoReplacedEntityRenderer<T, TAnimatable> renderer, boolean disablePreviewRotation, boolean hideEquipment, float previewYaw) {
+        renderLivingEntityPreview(x, y, scale, partialTick, animatable, renderer, disablePreviewRotation, hideEquipment, previewYaw, NO_MOUSE_ROTATION);
+    }
+
+    public static <T extends LivingEntity, TAnimatable extends LivingAnimatable<T>> void renderLivingEntityPreview(float x, float y, float scale, float partialTick, TAnimatable animatable, GeoReplacedEntityRenderer<T, TAnimatable> renderer, boolean disablePreviewRotation, boolean hideEquipment, float previewYaw, int left, int top, int right, int bottom, int mouseX, int mouseY) {
+        renderLivingEntityPreview(x, y, scale, partialTick, animatable, renderer, disablePreviewRotation, hideEquipment, previewYaw, getPreviewMouseRotation(left, top, right, bottom, mouseX, mouseY, disablePreviewRotation));
+    }
+
+    private static <T extends LivingEntity, TAnimatable extends LivingAnimatable<T>> void renderLivingEntityPreview(float x, float y, float scale, float partialTick, TAnimatable animatable, GeoReplacedEntityRenderer<T, TAnimatable> renderer, boolean disablePreviewRotation, boolean hideEquipment, float previewYaw, PreviewMouseRotation mouseRotation) {
         ItemStack[] savedEquipment;
         setPreviewMode(true);
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         LivingEntity livingEntity = animatable.getEntity();
-        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushMatrix();
-        modelViewStack.translate(x, y, 1050.0f);
-        modelViewStack.scale(1.0f, 1.0f, -1.0f);
-        RenderSystem.applyModelViewMatrix();
 
         PoseStack poseStack = new PoseStack();
-        poseStack.translate(0.0d, disablePreviewRotation ? 5.5d : 0.0d, 1000.0d);
-        poseStack.scale(scale, scale, scale);
+        poseStack.translate(x, y, MODEL_PREVIEW_Z);
+        poseStack.translate(0.0d, disablePreviewRotation ? 5.5d : 0.0d, 0.0d);
+        poseStack.scale(scale, scale, -scale);
         Quaternionf rotationZ = Axis.ZP.rotationDegrees(180.0f);
-        Quaternionf rotationX = Axis.XP.rotationDegrees(disablePreviewRotation ? 0.0f : -10.0f);
+        Quaternionf rotationX = Axis.XP.rotationDegrees(disablePreviewRotation ? 0.0f : -10.0f + mouseRotation.pitch);
         rotationZ.mul(rotationX);
         poseStack.mulPose(rotationZ);
 
@@ -321,11 +378,11 @@ public final class ModelPreviewRenderer {
             savedEquipment = null;
         }
 
-        float previewYaw = FRONT_FACING_YAW;
-        livingEntity.yBodyRot = previewYaw;
-        livingEntity.yBodyRotO = previewYaw;
-        livingEntity.setYRot(previewYaw);
-        livingEntity.yRotO = previewYaw;
+        float displayYaw = previewYaw + mouseRotation.yaw;
+        livingEntity.yBodyRot = displayYaw;
+        livingEntity.yBodyRotO = displayYaw;
+        livingEntity.setYRot(displayYaw);
+        livingEntity.yRotO = displayYaw;
         livingEntity.setXRot(0.0f);
         livingEntity.xRotO = 0.0f;
         livingEntity.yHeadRot = livingEntity.getYRot();
@@ -334,7 +391,7 @@ public final class ModelPreviewRenderer {
         Entity vehicle = livingEntity.getVehicle();
         if (vehicle instanceof LivingEntity) {
             float vehicleYaw = vehicle.getYRot();
-            poseStack.mulPose(Axis.YP.rotationDegrees(vehicleYaw - previewYaw));
+            poseStack.mulPose(Axis.YP.rotationDegrees(vehicleYaw - displayYaw));
             livingEntity.yHeadRot = vehicleYaw;
             livingEntity.yHeadRotO = vehicleYaw;
         }
@@ -383,8 +440,7 @@ public final class ModelPreviewRenderer {
                     slotIndex++;
                 }
             }
-            modelViewStack.popMatrix();
-            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             Lighting.setupFor3DItems();
             setPreviewMode(false);
         }
@@ -392,16 +448,13 @@ public final class ModelPreviewRenderer {
 
     // 纸娃娃
     public static void renderPlayerOverlay(GuiGraphics guiGraphics, LocalPlayer localPlayer, double x, double y, float scale, float yawOffset, int zDepth, float partialTick) {
+        guiGraphics.flush();
         setExtraPlayerMode(true);
-        org.joml.Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushMatrix();
-        modelViewStack.translate((float) (x + (scale * 0.5f)), (float) (y + (scale * 2.0f)), 0.0f);
-        modelViewStack.scale(1.0f, 1.0f, -1.0f);
-        RenderSystem.applyModelViewMatrix();
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(0.0f, 0.0f, -zDepth);
-        guiGraphics.pose().scale(scale, scale, scale);
+        guiGraphics.pose().translate(x + (scale * 0.5d), y + (scale * 2.0d), zDepth);
+        guiGraphics.pose().scale(scale, scale, -scale);
 
         float previewYaw = FRONT_FACING_YAW;
         Quaternionf rotationZ = Axis.ZP.rotationDegrees(180.1f);
@@ -423,18 +476,30 @@ public final class ModelPreviewRenderer {
         float oldXRotO = localPlayer.xRotO;
         float oldHeadRot = localPlayer.yHeadRot;
         float oldHeadRotO = localPlayer.yHeadRotO;
+        float headYawOffset = getExtraPlayerHeadYawOffset(localPlayer);
+        float headYawOffsetO = getExtraPlayerHeadYawOffsetO(localPlayer);
         localPlayer.yBodyRot = previewYaw;
         localPlayer.yBodyRotO = previewYaw;
         localPlayer.setYRot(previewYaw);
         localPlayer.yRotO = previewYaw;
-        localPlayer.yHeadRot = previewYaw;
-        localPlayer.yHeadRotO = previewYaw;
+        localPlayer.yHeadRot = previewYaw + headYawOffset;
+        localPlayer.yHeadRotO = previewYaw + headYawOffsetO;
         localPlayer.setXRot(0.0f);
         localPlayer.xRotO = 0.0f;
 
-        RenderSystem.runAsFancy(() -> {
-            entityRenderDispatcher.render(localPlayer, 0.0d, 0.0d, 0.0d, previewYaw, partialTick, guiGraphics.pose(), guiGraphics.bufferSource(), 15728880);
-        });
+        boolean renderedCustomModel = PlayerCapability.get(localPlayer)
+                .filter(PlayerCapability::isModelActive)
+                .map(cap -> {
+                    RenderSystem.runAsFancy(() -> RendererManager.getPlayerRenderer()
+                            .render(localPlayer, previewYaw, partialTick, guiGraphics.pose(), guiGraphics.bufferSource(), 15728880));
+                    return true;
+                })
+                .orElse(false);
+        if (!renderedCustomModel) {
+            RenderSystem.runAsFancy(() -> {
+                entityRenderDispatcher.render(localPlayer, 0.0d, 0.0d, 0.0d, previewYaw, partialTick, guiGraphics.pose(), guiGraphics.bufferSource(), 15728880);
+            });
+        }
 
         guiGraphics.flush();
         entityRenderDispatcher.setRenderShadow(true);
@@ -447,8 +512,7 @@ public final class ModelPreviewRenderer {
         localPlayer.yHeadRot = oldHeadRot;
         localPlayer.yHeadRotO = oldHeadRotO;
         guiGraphics.pose().popPose();
-        modelViewStack.popMatrix();
-        RenderSystem.applyModelViewMatrix();
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         Lighting.setupFor3DItems();
         setExtraPlayerMode(false);
     }

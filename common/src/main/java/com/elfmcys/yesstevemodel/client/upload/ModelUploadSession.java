@@ -6,11 +6,11 @@ import com.elfmcys.yesstevemodel.network.message.C2SModelUploadChunkPacket;
 import com.elfmcys.yesstevemodel.network.message.C2SModelUploadFinishPacket;
 import com.elfmcys.yesstevemodel.network.message.C2SModelUploadStartPacket;
 import com.elfmcys.yesstevemodel.util.DigestUtil;
+import com.elfmcys.yesstevemodel.util.PerformanceProfiler;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import rip.ysm.legacy.YesModelUtils;
 
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -199,7 +199,6 @@ public final class ModelUploadSession {
             case 4 -> Component.translatable("gui.yes_steve_model.import.error.server_busy");
             case 5 -> Component.translatable("gui.yes_steve_model.import.error.invalid_model_id_or_hash");
             case 6 -> Component.translatable("gui.yes_steve_model.import.error.disabled_by_server");
-            case 7 -> Component.translatable("gui.yes_steve_model.import.error.unsupported_7z");
             default -> Component.translatable("gui.yes_steve_model.import.error.status", status);
         };
     }
@@ -237,7 +236,6 @@ public final class ModelUploadSession {
                  "Session expired",
                  "Incomplete upload",
                  "Hash mismatch",
-                 "7z import is not supported yet",
                  "Server failed to cache model",
                  "Server rejected write" -> true;
             default -> false;
@@ -248,13 +246,20 @@ public final class ModelUploadSession {
         if (state != State.UPLOADING) {
             return;
         }
+        long perfStart = PerformanceProfiler.start();
         int budget = Math.max(1, chunksPerTick);
+        int chunks = 0;
+        int bytes = 0;
         for (int i = 0; i < budget && nextOffset < data.length; i++) {
             int end = Math.min(nextOffset + chunkSize, data.length);
-            byte[] slice = Arrays.copyOfRange(data, nextOffset, end);
-            NetworkHandler.sendToServer(new C2SModelUploadChunkPacket(uploadId, nextOffset, slice));
+            int length = end - nextOffset;
+            NetworkHandler.sendToServer(new C2SModelUploadChunkPacket(uploadId, nextOffset, data, nextOffset, length));
             nextOffset = end;
+            chunks++;
+            bytes += length;
         }
+        PerformanceProfiler.logElapsed("client_upload_tick", modelId, perfStart,
+                "chunks=" + chunks + " bytes=" + bytes + " sent=" + nextOffset + "/" + data.length);
         if (nextOffset >= data.length) {
             state = State.FINISHING;
             message = Component.translatable("gui.yes_steve_model.import.state.verifying");
@@ -308,7 +313,6 @@ public final class ModelUploadSession {
     private enum ImportKind {
         YSM,
         ZIP,
-        SEVEN_ZIP,
         UNKNOWN;
 
         private static ImportKind fromFileName(String fileName) {
@@ -321,9 +325,6 @@ public final class ModelUploadSession {
             }
             if (lower.endsWith(".zip")) {
                 return ZIP;
-            }
-            if (lower.endsWith(".7z")) {
-                return SEVEN_ZIP;
             }
             return UNKNOWN;
         }

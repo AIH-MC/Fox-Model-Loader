@@ -41,6 +41,12 @@ public abstract class GeoEntity<T extends Entity> extends AnimatableEntity<T> {
     private PhysicsManager bones;
 
     @Nullable
+    private PhysicsManager previewBones;
+
+    @Nullable
+    private PhysicsManager extraPlayerBones;
+
+    @Nullable
     private MolangWatchRegistry boneLookup;
 
     @Nullable
@@ -64,7 +70,19 @@ public abstract class GeoEntity<T extends Entity> extends AnimatableEntity<T> {
 
     @Override
     public PhysicsManager getPhysicsManager() {
-        if (ModelPreviewRenderer.isFirstPerson() || ModelPreviewRenderer.isExtraPlayer()) {
+        if (ModelPreviewRenderer.isPreview()) {
+            if (this.previewBones == null) {
+                this.previewBones = new PhysicsManager();
+            }
+            return this.previewBones;
+        }
+        if (ModelPreviewRenderer.isExtraPlayer()) {
+            if (this.extraPlayerBones == null) {
+                this.extraPlayerBones = new PhysicsManager();
+            }
+            return this.extraPlayerBones;
+        }
+        if (ModelPreviewRenderer.isFirstPerson()) {
             return this.physicsManager;
         }
         if (this.bones == null) {
@@ -159,8 +177,14 @@ public abstract class GeoEntity<T extends Entity> extends AnimatableEntity<T> {
 
     @Override
     public void reset() {
+        if (this.modelFuture != null) {
+            awaitAsyncResult();
+        }
         super.reset();
         this.bones = null;
+        this.previewBones = null;
+        this.extraPlayerBones = null;
+        this.modelFuture = null;
         this.updateTicks = 0;
     }
 
@@ -235,7 +259,8 @@ public abstract class GeoEntity<T extends Entity> extends AnimatableEntity<T> {
     @Nullable
     public AnimationEvent<?> processAnimationImpl(float partialTick, boolean isFirstPerson) {
         RenderSystem.assertOnRenderThread();
-        if (this.modelFuture != null) {
+        boolean isGuiPreview = ModelPreviewRenderer.isPreview() || ModelPreviewRenderer.isExtraPlayer();
+        if (!isGuiPreview && this.modelFuture != null) {
             AnimationEvent<?> event = awaitAsyncResult();
             if (event != null) {
                 return event;

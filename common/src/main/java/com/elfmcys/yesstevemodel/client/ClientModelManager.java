@@ -90,6 +90,7 @@ public class ClientModelManager {
     private static volatile Map<String, ModelAssembly> modelAssemblyMap = Object2ReferenceMaps.emptyMap();
     private static volatile Map<String, ModelPackData> modelPackMap = new Object2ReferenceOpenHashMap<>();
     private static final Set<String> localOnlyModelIds = ConcurrentHashMap.newKeySet();
+    private static final ConcurrentHashMap<String, Path> localModelSourcePaths = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> modelLastUsedAt = new ConcurrentHashMap<>();
     private static final Set<String> gpuCacheTrimmedModels = ConcurrentHashMap.newKeySet();
 
@@ -564,6 +565,7 @@ public class ClientModelManager {
         modelPackMap = new Object2ReferenceOpenHashMap<>();
         pendingModelCallback = null;
         pendingModelQueue.clear();
+        localModelSourcePaths.clear();
         modelLastUsedAt.clear();
         gpuCacheTrimmedModels.clear();
 
@@ -602,6 +604,28 @@ public class ClientModelManager {
 
     public static boolean isLocalOnlyModel(String modelId) {
         return modelId != null && localOnlyModelIds.contains(modelId);
+    }
+
+    public static Optional<Path> getLocalModelSourcePath(String modelId) {
+        if (modelId == null || modelId.isBlank()) {
+            return Optional.empty();
+        }
+        Path path = localModelSourcePaths.get(modelId);
+        if (path == null || !Files.exists(path)) {
+            return Optional.empty();
+        }
+        return Optional.of(path);
+    }
+
+    public static Map<String, Path> snapshotLocalCustomSources() {
+        LinkedHashMap<String, Path> out = new LinkedHashMap<>();
+        for (String id : localOnlyModelIds) {
+            Path p = localModelSourcePaths.get(id);
+            if (p != null && Files.exists(p)) {
+                out.put(id, p);
+            }
+        }
+        return Collections.unmodifiableMap(out);
     }
 
     public static boolean isSelectedLocalOnlyModel(String modelId) {
@@ -646,6 +670,7 @@ public class ClientModelManager {
             return;
         }
         localOnlyModelIds.remove(modelId);
+        localModelSourcePaths.remove(modelId);
         LocalPlayer player = Minecraft.getInstance().player;
         if (player != null) {
             PlayerCapability.get(player).ifPresent(cap -> {
@@ -683,6 +708,7 @@ public class ClientModelManager {
             List<ModelAssembly> removed = new ArrayList<>();
             for (String modelId : modelIds) {
                 localOnlyModelIds.remove(modelId);
+                localModelSourcePaths.remove(modelId);
                 if (modelId.equals(selectedLocalOnlyModelId)) {
                     clearSelectedLocalOnlyModel();
                 }
@@ -723,7 +749,8 @@ public class ClientModelManager {
                     localOnlyModelIds.remove(modelId);
                     throw new IllegalStateException("Failed to build local model");
                 }
-                persistImportedModel(modelId, fileName, importData);
+                Path persisted = persistImportedModel(modelId, fileName, importData);
+                rememberLocalModelSource(ServerModelManager.CUSTOM, modelId, persisted);
                 Minecraft.getInstance().execute(ClientModelManager::flushPendingModels);
                 YesSteveModel.LOGGER.info("[YSM] Imported local model: {}", modelId);
             } catch (Exception e) {
@@ -737,9 +764,9 @@ public class ClientModelManager {
         });
     }
 
-    private static void persistImportedModel(String modelId, String fileName, byte[] data) throws IOException {
+    private static Path persistImportedModel(String modelId, String fileName, byte[] data) throws IOException {
         if (modelId == null || modelId.isBlank() || data == null) {
-            return;
+            return null;
         }
         String extension = importExtension(fileName);
         if (extension.isBlank()) {
@@ -761,6 +788,7 @@ public class ClientModelManager {
             }
             moved = true;
             removeSiblingImportFiles(modelId, target);
+            return target;
         } finally {
             if (!moved) {
                 Files.deleteIfExists(temp);
@@ -797,6 +825,7 @@ public class ClientModelManager {
         modelPhraseExecutor.submit(() -> {
             Component error = null;
             try {
+                localModelSourcePaths.clear();
                 loadDirectoryModels(ServerModelManager.BUILT);
                 loadDirectoryModels(ServerModelManager.CUSTOM);
                 loadDirectoryModels(ServerModelManager.AUTH);
@@ -1110,9 +1139,6 @@ public class ClientModelManager {
         if (lower.endsWith(".zip")) {
             return parseZipImport(data);
         }
-        if (lower.endsWith(".7z")) {
-            throw new UnsupportedOperationException("7z import is not supported yet");
-        }
         throw new IllegalArgumentException("Unsupported model import type: " + fileName);
     }
 
@@ -1164,7 +1190,9 @@ public class ClientModelManager {
                 }
                 try {
                     if (YSMFolderDeserializer.isModelFolder(dir)) {
-                        loadLocalModel(normalizeLocalModelId(baseDir.relativize(dir).toString()), dir);
+                        String modelId = normalizeLocalModelId(baseDir.relativize(dir).toString());
+                        loadLocalModel(modelId, dir);
+                        rememberLocalModelSource(baseDir, modelId, dir);
                         loadedAny[0] = true;
                         return FileVisitResult.SKIP_SUBTREE;
                     }
@@ -1186,6 +1214,7 @@ public class ClientModelManager {
                     byte[] data = Files.readAllBytes(file);
                     RawYsmModel rawModel = parseImportModel(fileName, data);
                     loadLocalModel(modelId, rawModel);
+                    rememberLocalModelSource(baseDir, modelId, file);
                     loadedAny[0] = true;
                 } catch (Exception e) {
                     YesSteveModel.LOGGER.error("[YSM] Failed to load local model file: {}", file, e);
@@ -1217,7 +1246,7 @@ public class ClientModelManager {
 
     private static String stripImportExtension(String modelId) {
         String lower = modelId.toLowerCase(Locale.ROOT);
-        for (String extension : new String[]{".ysm", ".zip", ".7z"}) {
+        for (String extension : new String[]{".ysm", ".zip"}) {
             if (lower.endsWith(extension)) {
                 return modelId.substring(0, modelId.length() - extension.length());
             }
@@ -1227,6 +1256,23 @@ public class ClientModelManager {
 
     private static String normalizeLocalModelId(String modelId) {
         return stripImportExtension(modelId.replace('\\', '/').toLowerCase(Locale.ROOT).replaceAll("/+", "/"));
+    }
+
+    private static void rememberLocalModelSource(Path baseDir, String modelId, Path source) {
+        if (modelId == null || modelId.isBlank() || source == null) {
+            return;
+        }
+        if (!samePath(baseDir, ServerModelManager.CUSTOM)) {
+            return;
+        }
+        localModelSourcePaths.put(modelId, source.toAbsolutePath().normalize());
+    }
+
+    private static boolean samePath(Path a, Path b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return a.toAbsolutePath().normalize().equals(b.toAbsolutePath().normalize());
     }
 
     private static void onSyncComplete() {
