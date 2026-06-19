@@ -158,6 +158,7 @@ public class YSMBinding extends ContextBinding {
         livingEntityVar("weapon_type", ctx -> getWeaponType(ctx));
         livingEntityVar("weapon_is_trident", ctx -> getWeaponState(ctx).kind() == WeaponKind.TRIDENT);
         livingEntityVar("weapon_is_lance", ctx -> getWeaponState(ctx).kind() == WeaponKind.LANCE);
+        livingEntityVar("weapon_is_spear", ctx -> getWeaponState(ctx).kind() == WeaponKind.SPEAR);
         livingEntityVar("weapon_is_mace", ctx -> getWeaponState(ctx).kind() == WeaponKind.MACE);
         livingEntityVar("weapon_attacking", ctx -> isWeaponAttacking(getWeaponState(ctx)));
         livingEntityVar("weapon_using", ctx -> isWeaponUsing(getWeaponState(ctx)));
@@ -435,12 +436,13 @@ public class YSMBinding extends ContextBinding {
             case TRIDENT -> 1;
             case LANCE -> 2;
             case MACE -> 3;
+            case SPEAR -> 4;
             case NONE -> 0;
         };
     }
 
     private static boolean isWeaponAttacking(WeaponActionState state) {
-        return state.trident().attacking() || state.lance().jabbing() || state.mace().attacking();
+        return state.trident().attacking() || state.lance().jabbing() || state.lance().lunging() || state.mace().attacking();
     }
 
     private static boolean isSwinging(IContext<LivingEntity> context) {

@@ -222,7 +222,7 @@ public class QueryBinding extends ContextBinding {
         if (context.entity() instanceof LocalPlayer) {
             return PlayerEntityFrameState.getHeadYawDelta();
         }
-        return 20.0f * (context.entity().getYRot() - context.entity().yRotO);
+        return 20.0f * Mth.wrapDegrees(context.entity().getYRot() - context.entity().yRotO);
     }
 
     private static float getDistanceFromCamera(IContext<Entity> context) {

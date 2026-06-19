@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.geckolib3.geo;
 
 import com.elfmcys.yesstevemodel.client.renderer.SubmitRenderContext;
+import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
 import com.elfmcys.yesstevemodel.client.entity.GeckoVehicleEntity;
 import com.elfmcys.yesstevemodel.geckolib3.core.AnimatableEntity;
 import com.elfmcys.yesstevemodel.geckolib3.core.util.Color;
@@ -38,9 +39,12 @@ public interface IGeoRenderer<T extends AnimatableEntity<?>> {
         if (collector != null && vertexConsumer == null) {
             float[] boneParams = model.getMatrixData().clone();
             float[] absPivotData = model.getAbsPivotData().clone();
+            boolean previewMode = ModelPreviewRenderer.isPreview();
+            boolean extraPlayerMode = ModelPreviewRenderer.isExtraPlayer();
+            boolean worldRenderMode = ModelPreviewRenderer.isWorldRender();
             animatable.resetAnimationState();
             collector.submitCustomGeometry(poseStack, renderType, (pose, buffer) ->
-                    NativeModelRenderer.renderMesh(buffer, pose, model.getGeoModel(), boneParams, absPivotData, i, 0, i2, i3, f2, f3, f4, f5, textureLocation, false));
+                    renderSubmittedGeometry(buffer, pose, model, boneParams, absPivotData, i, i2, i3, f2, f3, f4, f5, textureLocation, previewMode, extraPlayerMode, worldRenderMode));
             setCurrentModelRenderCycle(EModelRenderCycle.REPEATED);
             return;
         }
@@ -51,6 +55,22 @@ public interface IGeoRenderer<T extends AnimatableEntity<?>> {
         boolean allowDirectGpuRenderer = !(animatable instanceof GeckoVehicleEntity);
         NativeModelRenderer.renderMesh(vertexConsumer, poseStack.last(), model.getGeoModel(), model.getMatrixData(), model.getAbsPivotData(), i, 0, i2, i3, f2, f3, f4, f5, textureLocation, allowDirectGpuRenderer);
         setCurrentModelRenderCycle(EModelRenderCycle.REPEATED);
+    }
+
+    private static void renderSubmittedGeometry(VertexConsumer buffer, PoseStack.Pose pose, AnimatedGeoModel model, float[] matrixData, float[] absPivotData, int textureIndex, int packedLight, int packedOverlay, float red, float green, float blue, float alpha, Identifier textureLocation, boolean previewMode, boolean extraPlayerMode, boolean worldRenderMode) {
+        boolean previousPreviewMode = ModelPreviewRenderer.isPreview();
+        boolean previousExtraPlayerMode = ModelPreviewRenderer.isExtraPlayer();
+        boolean previousWorldRenderMode = ModelPreviewRenderer.isWorldRender();
+        ModelPreviewRenderer.setPreviewMode(previewMode);
+        ModelPreviewRenderer.setExtraPlayerMode(extraPlayerMode);
+        ModelPreviewRenderer.setWorldRenderMode(worldRenderMode);
+        try {
+            NativeModelRenderer.renderMesh(buffer, pose, model.getGeoModel(), matrixData, absPivotData, textureIndex, 0, packedLight, packedOverlay, red, green, blue, alpha, textureLocation, false);
+        } finally {
+            ModelPreviewRenderer.setWorldRenderMode(previousWorldRenderMode);
+            ModelPreviewRenderer.setExtraPlayerMode(previousExtraPlayerMode);
+            ModelPreviewRenderer.setPreviewMode(previousPreviewMode);
+        }
     }
 
     default void renderEarly(T animatable, PoseStack poseStack, float partialTick,

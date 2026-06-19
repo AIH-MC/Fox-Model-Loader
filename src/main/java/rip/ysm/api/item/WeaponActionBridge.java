@@ -2,10 +2,12 @@ package rip.ysm.api.item;
 
 import com.elfmcys.yesstevemodel.client.animation.condition.InnerClassify;
 import com.elfmcys.yesstevemodel.client.input.InputStateKey;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
+import net.minecraft.world.item.component.KineticWeapon;
 import net.minecraft.world.phys.Vec3;
 
 public final class WeaponActionBridge {
@@ -27,7 +29,7 @@ public final class WeaponActionBridge {
         float verticalSpeed = (float) movement.y;
         return switch (kind) {
             case TRIDENT -> new WeaponActionState(kind, buildTridentState(entity, stack, partialTick), LanceActionState.EMPTY, MaceActionState.EMPTY, speed, verticalSpeed);
-            case LANCE -> new WeaponActionState(kind, TridentActionState.EMPTY, buildLanceState(entity, stack, partialTick, speed), MaceActionState.EMPTY, speed, verticalSpeed);
+            case LANCE, SPEAR -> new WeaponActionState(kind, TridentActionState.EMPTY, buildLanceState(entity, stack, partialTick, speed), MaceActionState.EMPTY, speed, verticalSpeed);
             case MACE -> new WeaponActionState(kind, TridentActionState.EMPTY, LanceActionState.EMPTY, buildMaceState(entity, partialTick, verticalSpeed), speed, verticalSpeed);
             case NONE -> WeaponActionState.EMPTY;
         };
@@ -103,18 +105,27 @@ public final class WeaponActionBridge {
     }
 
     private static float getAttackTicks(LivingEntity entity, boolean attacking, float partialTick) {
-        return attacking ? Math.max(0.0f, entity.swingTime + partialTick) : 0.0f;
+        return attacking ? InputStateKey.getSwingTicks(entity, partialTick) : 0.0f;
     }
 
     private static float getChargeProgress(LivingEntity entity, ItemStack stack, boolean using, float partialTick) {
         if (!using) {
             return 0.0f;
         }
+        float useTicks = getUseTicks(entity, true, partialTick);
+        KineticWeapon kineticWeapon = stack.get(DataComponents.KINETIC_WEAPON);
+        if (kineticWeapon != null) {
+            int duration = kineticWeapon.computeDamageUseDuration();
+            if (duration <= 0) {
+                return 0.0f;
+            }
+            return Math.min(1.0f, useTicks / duration);
+        }
         int duration = stack.getUseDuration(entity);
         if (duration <= 0) {
             return 0.0f;
         }
-        return Math.min(1.0f, getUseTicks(entity, true, partialTick) / duration);
+        return Math.min(1.0f, useTicks / duration);
     }
 
     private static float horizontalSpeed(Vec3 movement) {

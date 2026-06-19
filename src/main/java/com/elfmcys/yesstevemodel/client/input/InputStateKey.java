@@ -146,6 +146,10 @@ public class InputStateKey {
         return 0.0f;
     }
 
+    public static float getSwingAnimationTicks(LivingEntity entity, float partialTick) {
+        return Math.max(0.0f, getSwingTicks(entity, partialTick) - 1.0f);
+    }
+
     public static float getAttackProgress(LivingEntity entity, float partialTick) {
         if (entity == null || entity.isSleeping()) {
             return 0.0f;
@@ -165,6 +169,10 @@ public class InputStateKey {
             return entity.getTicksUsingItem(partialTick);
         }
         return isLocalPlayer(entity) && usePulseTicks > 0 ? Math.max(1.0f, usePulseAge + partialTick) : 0.0f;
+    }
+
+    public static float getUseAnimationTicks(LivingEntity entity, float partialTick) {
+        return Math.max(0.0f, getTicksUsingItem(entity, partialTick) - 1.0f);
     }
 
     public static boolean isSwinging(LivingEntity entity, InteractionHand hand) {
@@ -213,6 +221,11 @@ public class InputStateKey {
 
     public static int getLocalSwingPulseAge() {
         return swingPulseAge;
+    }
+
+    public static boolean hasLocalInteractionState() {
+        LocalPlayer player = Minecraft.getInstance().player;
+        return usePulseTicks > 0 || swingPulseTicks > 0 || (player != null && (player.isUsingItem() || player.swinging));
     }
 
     private static void triggerHandAnimation(int button, int action) {

@@ -43,6 +43,7 @@ public class ExtraPlayerConfigScreen extends OptionScreen {
 
         OptionGroup debug = new OptionGroup("debug")
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("model_memory_profiler", GeneralConfig.MODEL_MEMORY_PROFILER)))
+                .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("model_import_performance_log", GeneralConfig.MODEL_IMPORT_PERFORMANCE_LOG)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_frame_profiler", GeneralConfig.ANIMATION_FRAME_PROFILER)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("animation_debug_log", GeneralConfig.ANIMATION_DEBUG_LOG)))
                 .add(new BooleanOptionRow(0, 0, 0, 22, Option.ofBoolean("input_state_debug_log", GeneralConfig.INPUT_STATE_DEBUG_LOG)))

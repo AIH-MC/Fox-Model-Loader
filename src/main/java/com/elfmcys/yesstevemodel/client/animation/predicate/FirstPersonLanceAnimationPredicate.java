@@ -10,6 +10,7 @@ import com.elfmcys.yesstevemodel.geckolib3.core.enums.PlayState;
 import com.elfmcys.yesstevemodel.molang.runtime.ExpressionEvaluator;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
 import rip.ysm.api.item.LanceActionState;
 import rip.ysm.api.item.WeaponActionBridge;
 import rip.ysm.api.item.WeaponActionState;
@@ -25,7 +26,7 @@ public class FirstPersonLanceAnimationPredicate implements IAnimationPredicate<P
         PlayerGeoEntity animatable = event.getAnimatable();
         LocalPlayer player = animatable.getEntity();
         WeaponActionState state = WeaponActionBridge.get(player, event.getPartialTick());
-        if (state.kind() != WeaponKind.LANCE) {
+        if (!isLanceLike(state.kind())) {
             return PlayState.STOP;
         }
 
@@ -34,14 +35,17 @@ public class FirstPersonLanceAnimationPredicate implements IAnimationPredicate<P
             if (InputStateKey.getTicksUsingItem(player) == 1 && animatable.getPositionTracker().markProcessed(LANCE_USE_MARKER)) {
                 event.getController().stopTransition();
             }
-            String animation = selectAnimation(animatable, selectChargeNames(lance));
+            ItemStack itemStack = player.getMainHandItem();
+            String animation = selectAnimation(animatable, LanceAnimationTiming.selectChargeNames(lance));
+            applyKineticChargeAnimationTickOverride(event, itemStack, lance.useTicks(), animation == null ? null : animatable.getAnimation(animation));
             return playIfPresent(event, animation, ILoopType.EDefaultLoopTypes.LOOP);
         }
 
         if (lance.jabbing() || lance.lunging()) {
-            if (player.swingTime == 0 && player.swingingArm == InteractionHand.MAIN_HAND && animatable.getPositionTracker().markProcessed(LANCE_ATTACK_MARKER)) {
+            if (shouldRestartAttackAnimation(player) && animatable.getPositionTracker().markProcessed(LANCE_ATTACK_MARKER)) {
                 event.getController().stopTransition();
             }
+            event.getController().setAnimationTickOverride(InputStateKey.getSwingAnimationTicks(player, event.getPartialTick()));
             String animation = lance.lunging()
                     ? selectAnimation(animatable, "lance_lunge", "lance_jab", "swing:lance")
                     : selectAnimation(animatable, "lance_jab", "swing:lance");
@@ -58,14 +62,15 @@ public class FirstPersonLanceAnimationPredicate implements IAnimationPredicate<P
         return playIfPresent(event, animation, ILoopType.EDefaultLoopTypes.LOOP);
     }
 
-    private String[] selectChargeNames(LanceActionState lance) {
-        if (lance.ridingCharge()) {
-            return new String[]{"lance_riding_charge", "lance_charge", "use_mainhand:lance"};
+    private boolean shouldRestartAttackAnimation(LocalPlayer player) {
+        if (InputStateKey.isLocalSwinging(InteractionHand.MAIN_HAND) && InputStateKey.getLocalSwingPulseAge() <= 1) {
+            return true;
         }
-        if (lance.fallFlying()) {
-            return new String[]{"lance_fall_flying_charge", "lance_charge", "use_mainhand:lance"};
-        }
-        return new String[]{"lance_charge", "use_mainhand:lance"};
+        return player.swingTime == 0 && player.swingingArm == InteractionHand.MAIN_HAND;
+    }
+
+    private boolean isLanceLike(WeaponKind kind) {
+        return kind == WeaponKind.LANCE || kind == WeaponKind.SPEAR;
     }
 
     private String selectAnimation(PlayerGeoEntity entity, String... animationNames) {
@@ -76,6 +81,13 @@ public class FirstPersonLanceAnimationPredicate implements IAnimationPredicate<P
             }
         }
         return null;
+    }
+
+    private void applyKineticChargeAnimationTickOverride(AnimationEvent<PlayerGeoEntity> event, ItemStack itemStack, float useTicks, Animation animation) {
+        float animationTick = LanceAnimationTiming.sampleKineticChargeAnimationTick(itemStack, useTicks, animation);
+        if (animationTick >= 0.0f) {
+            event.getController().setAnimationTickOverride(animationTick);
+        }
     }
 
     private PlayState playIfPresent(AnimationEvent<PlayerGeoEntity> event, String animationName, ILoopType loopType) {

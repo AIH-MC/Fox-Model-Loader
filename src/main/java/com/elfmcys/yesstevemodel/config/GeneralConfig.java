@@ -34,6 +34,8 @@ public class GeneralConfig {
 
     public static ModConfigSpec.BooleanValue MODEL_MEMORY_PROFILER;
 
+    public static ModConfigSpec.BooleanValue MODEL_IMPORT_PERFORMANCE_LOG;
+
     public static ModConfigSpec.BooleanValue ANIMATION_FRAME_PROFILER;
 
     public static ModConfigSpec.BooleanValue ANIMATION_DEBUG_LOG;
@@ -150,6 +152,8 @@ public class GeneralConfig {
         builder.push("ExperimentalTesting");
         builder.comment("Log model loading memory checkpoints. Intended for diagnostics only.");
         MODEL_MEMORY_PROFILER = builder.define("ModelMemoryProfiler", false);
+        builder.comment("Print [YSM][Perf] timing logs for model import, upload, and reload checkpoints. Intended for diagnostics only.");
+        MODEL_IMPORT_PERFORMANCE_LOG = builder.define("ModelImportPerformanceLog", false);
         builder.comment("Collect animation timing/evaluation diagnostics. Intended for diagnostics only.");
         ANIMATION_FRAME_PROFILER = builder.define("AnimationFrameProfiler", false);
         builder.comment("Print one [YSM-ANIM] line for each animation evaluation when AnimationFrameProfiler is enabled.");

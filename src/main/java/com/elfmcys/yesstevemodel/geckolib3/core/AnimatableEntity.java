@@ -85,6 +85,9 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
 
     public boolean modelInitialized = false;
 
+    private static final float WALK_SPEED_THRESHOLD = 0.15f;
+    private float smoothedRemoteSpeed = 0.0f;
+
     public Map<String, AnimationState> animationStates = Maps.newHashMap();
 
     private final AnimationProcessor<TEntity> animationProcessor = new AnimationProcessor<>(this);
@@ -138,6 +141,7 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
         this.lastAnimationEvaluationBoneCount = 0;
         this.lastAnimationEvaluationControllerCount = 0;
         this.animationStates.clear();
+        this.smoothedRemoteSpeed = 0.0f;
     }
 
     public EntityFrameStateTracker<TEntity> createPositionTracker(TEntity tentity) {
@@ -258,19 +262,25 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
             if (playerCapability != null && playerCapability.hasRenderState()) {
                 limbSwingAmount = playerCapability.getRenderStateWalkAnimationSpeed();
                 limbSwing = playerCapability.getRenderStateWalkAnimationPos();
-                if (!playerCapability.isLocalPlayerModel()) {
-                    float physicalSpeed = MovementQuery.getPhysicalGroundSpeed(entity, this.positionTracker);
-                    if (physicalSpeed > MovementQuery.EPSILON) {
-                        limbSwingAmount = physicalSpeed;
-                        limbSwing = this.seekTime * 0.6662f;
-                    } else {
-                        limbSwingAmount = 0.0f;
-                        renderStateMovementSuppressed = true;
-                    }
-                }
             } else {
                 limbSwingAmount = livingEntity.walkAnimation.speed(partialTick);
                 limbSwing = livingEntity.walkAnimation.position(partialTick);
+            }
+            if (playerCapability != null && !playerCapability.isLocalPlayerModel()) {
+                // Filter vanilla walkAnimation.speed() decay residue
+                if (Math.abs(limbSwingAmount) <= WALK_SPEED_THRESHOLD) {
+                    limbSwingAmount = 0.0f;
+                }
+                float physicalSpeed = MovementQuery.getPhysicalGroundSpeed(entity, this.positionTracker);
+                if (physicalSpeed > WALK_SPEED_THRESHOLD) {
+                    this.smoothedRemoteSpeed += 0.3f * (physicalSpeed - this.smoothedRemoteSpeed);
+                    limbSwingAmount = this.smoothedRemoteSpeed;
+                    limbSwing = this.seekTime * 0.6662f;
+                } else {
+                    this.smoothedRemoteSpeed = 0.0f;
+                    limbSwingAmount = 0.0f;
+                }
+                renderStateMovementSuppressed = true;
             }
             if (!renderStateMovementSuppressed && limbSwingAmount <= 1.0E-4f) {
                 float movementSpeed = Mth.clamp(MovementQuery.getGroundSpeed(entity, this.positionTracker, null), 0.0f, 1.0f);
@@ -365,7 +375,9 @@ public abstract class AnimatableEntity<TEntity extends Entity> {
                 int renderFrameId = AnimationFrameProfiler.getRenderFrameId();
                 int boneCount = getEvaluationContext().getBoneCount();
                 int controllerCount = this.manager.getAnimationControllers().size();
-                boolean canReuseEvaluation = this.lastAnimationEvaluationFrameId == renderFrameId
+                boolean canReuseEvaluation = !ModelPreviewRenderer.isPreview()
+                        && !ModelPreviewRenderer.isExtraPlayer()
+                        && this.lastAnimationEvaluationFrameId == renderFrameId
                         && Float.compare(this.lastAnimationEvaluationSeekTime, this.seekTime) == 0
                         && this.lastAnimationEvaluationActive == z
                         && this.lastAnimationEvaluationModel == this.currentModel

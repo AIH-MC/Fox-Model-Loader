@@ -4,6 +4,7 @@ import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.animation.IAnimationPredicate;
 import com.elfmcys.yesstevemodel.client.animation.condition.ConditionManager;
+import com.elfmcys.yesstevemodel.client.animation.condition.InnerClassify;
 import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import rip.ysm.compat.ironsspellbooks.SpellbooksCompat;
@@ -19,6 +20,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.apache.commons.lang3.StringUtils;
+import rip.ysm.api.item.WeaponKind;
 
 public class ItemHoldAnimationPredicate implements IAnimationPredicate<LivingAnimatable<?>> {
     private static final int SWING_START_MARKER = 1;
@@ -62,12 +64,14 @@ public class ItemHoldAnimationPredicate implements IAnimationPredicate<LivingAni
                 String str2 = conditionSwing.doTest(livingEntity, swingingHand);
                 if (StringUtils.isNoneBlank(str2)) {
                     debugSwingSelection(event, livingEntity, swingingHand, str2, hasLocalSwingPulse ? "local-condition" : "condition");
+                    applyLanceSwingTickOverride(event, livingEntity, swingingHand);
                     return IAnimationPredicate.playAnimationWithValid(event, str2, ILoopType.EDefaultLoopTypes.PLAY_ONCE, i);
                 }
             }
             String fallback = getFallbackSwingAnimation(event, livingEntity, swingingHand);
             if (fallback != null) {
                 debugSwingSelection(event, livingEntity, swingingHand, fallback, hasLocalSwingPulse ? "local-fallback" : "fallback");
+                applyLanceSwingTickOverride(event, livingEntity, swingingHand);
                 return IAnimationPredicate.playAnimationWithValid(event, fallback, ILoopType.EDefaultLoopTypes.PLAY_ONCE, i);
             }
             debugSwingSelection(event, livingEntity, swingingHand, "none", hasLocalSwingPulse ? "local-missing" : "missing");
@@ -96,6 +100,16 @@ public class ItemHoldAnimationPredicate implements IAnimationPredicate<LivingAni
             return true;
         }
         return InputStateKey.isLocalPlayerEntity(event.getAnimatable().getEntity());
+    }
+
+    private static void applyLanceSwingTickOverride(AnimationEvent<LivingAnimatable<?>> event, LivingEntity entity, InteractionHand hand) {
+        if (InputStateKey.isLocalPlayerEntity(entity) && isLanceLike(InnerClassify.getWeaponKind(entity.getItemInHand(hand)))) {
+            event.getController().setAnimationTickOverride(InputStateKey.getSwingAnimationTicks(entity, event.getPartialTick()));
+        }
+    }
+
+    private static boolean isLanceLike(WeaponKind kind) {
+        return kind == WeaponKind.LANCE || kind == WeaponKind.SPEAR;
     }
 
     private static void debugSwingEntry(AnimationEvent<LivingAnimatable<?>> event, LivingEntity entity, boolean hasLocalSwingPulse) {

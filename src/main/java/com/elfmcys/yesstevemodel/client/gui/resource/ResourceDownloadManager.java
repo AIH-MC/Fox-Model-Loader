@@ -14,12 +14,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public final class ResourceDownloadManager {
     private static final int HISTORY_LIMIT = 128;
     private static final long SERVER_UPLOAD_START_TIMEOUT_MS = 15_000L;
     private static final long SERVER_UPLOAD_STALL_TIMEOUT_MS = 30_000L;
+    private static final long SERVER_UPLOAD_VERIFY_TIMEOUT_MS = 90_000L;
     private static final ExecutorService DOWNLOAD_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
         Thread thread = new Thread(runnable, "YSM Resource Download");
         thread.setDaemon(true);
@@ -175,6 +175,9 @@ public final class ResourceDownloadManager {
                     public void onProgress(int downloaded, int total, long bytesPerSecond) {
                         int progressTotal = progressTotal(total, task.entry.size());
                         synchronized (LOCK) {
+                            if (currentTask != task || task.state != TaskState.DOWNLOADING) {
+                                return;
+                            }
                             task.progress = progressTotal > 0 ? Math.min(1f, (float) downloaded / progressTotal) : task.progress;
                             String bytes = ModelUploadSession.formatBytes(downloaded) + (total > 0 ? "/" + ModelUploadSession.formatBytes(total) : "");
                             String speed = bytesPerSecond > 0 ? " " + ModelRepoClient.formatSpeed(bytesPerSecond) : "";
@@ -190,6 +193,9 @@ public final class ResourceDownloadManager {
                     public void onCandidate(String url, int index, int total) {
                         this.host = ModelRepoClient.hostName(url);
                         synchronized (LOCK) {
+                            if (currentTask != task || task.state != TaskState.DOWNLOADING) {
+                                return;
+                            }
                             task.message = Component.translatable("gui.yes_steve_model.resource_station.try_source", index, total, this.host);
                             status = task.message;
                             statusColor = ChatFormatting.YELLOW;
@@ -200,7 +206,7 @@ public final class ResourceDownloadManager {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }, DOWNLOAD_EXECUTOR).orTimeout(taskTimeoutMs(task.config), TimeUnit.MILLISECONDS).whenComplete((data, error) ->
+        }, DOWNLOAD_EXECUTOR).whenComplete((data, error) ->
                 Minecraft.getInstance().execute(() -> onDownloadFinished(task, data, error)));
     }
 
@@ -246,6 +252,7 @@ public final class ResourceDownloadManager {
             task.uploadStartedAtMs = System.currentTimeMillis();
             task.lastUploadProgressAtMs = task.uploadStartedAtMs;
             task.lastUploadSentBytes = 0;
+            task.uploadFinishingAtMs = 0;
             task.message = Component.translatable("gui.yes_steve_model.import.state.server_starting");
             status = task.message;
             statusColor = ChatFormatting.YELLOW;
@@ -300,6 +307,9 @@ public final class ResourceDownloadManager {
             task.lastUploadSentBytes = session.getSentBytes();
             task.lastUploadProgressAtMs = System.currentTimeMillis();
         }
+        if (session.getState() == ModelUploadSession.State.FINISHING && task.uploadFinishingAtMs == 0) {
+            task.uploadFinishingAtMs = System.currentTimeMillis();
+        }
         status = task.message;
         statusColor = switch (session.getState()) {
             case COMPLETED -> ChatFormatting.GREEN;
@@ -327,6 +337,12 @@ public final class ResourceDownloadManager {
         if (session.getState() == ModelUploadSession.State.UPLOADING
                 && task.lastUploadProgressAtMs > 0
                 && now - task.lastUploadProgressAtMs > SERVER_UPLOAD_STALL_TIMEOUT_MS) {
+            ModelUploadSession.failCurrent(Component.translatable("gui.yes_steve_model.resource_station.upload_stalled"));
+            return;
+        }
+        if (session.getState() == ModelUploadSession.State.FINISHING
+                && task.uploadFinishingAtMs > 0
+                && now - task.uploadFinishingAtMs > SERVER_UPLOAD_VERIFY_TIMEOUT_MS) {
             ModelUploadSession.failCurrent(Component.translatable("gui.yes_steve_model.resource_station.upload_stalled"));
         }
     }
@@ -360,10 +376,6 @@ public final class ResourceDownloadManager {
         }
     }
 
-    private static long taskTimeoutMs(ResourceStationConfig.State config) {
-        return Math.max(15_000L, config.timeoutMs() * 4L);
-    }
-
     private static int progressTotal(int contentLength, long entrySize) {
         if (contentLength > 0) {
             return contentLength;
@@ -390,6 +402,7 @@ public final class ResourceDownloadManager {
         private Component message = Component.empty();
         private long uploadStartedAtMs;
         private long lastUploadProgressAtMs;
+        private long uploadFinishingAtMs;
         private int lastUploadSentBytes;
 
         private DownloadTask(ModelRepoEntry entry, ResourceStationConfig.State config) {

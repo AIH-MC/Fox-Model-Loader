@@ -23,8 +23,7 @@
 						{"sword": "ctrl.hold('offhand', ':sword')"},
 						{"bow": "ctrl.hold('offhand', ':bow')"},
 						{"shield": "ctrl.hold('offhand', ':shield')"},
-						{"spear": "ctrl.hold('offhand', ':spear')"},
-						{"lance": "ctrl.hold('offhand', ':lance')"},
+						{"spear": "ctrl.hold('offhand', ':spear')||ctrl.hold('offhand', ':lance')"},
 						{"pickaxe": "ctrl.hold('offhand', ':pickaxe')"},
 						{"shovel": "ctrl.hold('offhand', ':shovel')||ctrl.hold('offhand', ':spade')"},
 						{"hoe": "ctrl.hold('offhand', ':hoe')"},
@@ -200,7 +199,7 @@
 				"spear_idle": {
 					"animations": ["hold_offhand:spear_idle"],
 					"transitions": [
-						{"default": "!ctrl.hold('offhand', ':spear')"},
+						{"default": "!(ctrl.hold('offhand', ':spear')||ctrl.hold('offhand', ':lance'))"},
 						{"spear_not_idle": "!ctrl.idle"}
 					],
 					"blend_transition": {
@@ -219,7 +218,7 @@
 				"spear_not_idle": {
 					"animations": ["hold_offhand:spear_not_idle"],
 					"transitions": [
-						{"default": "!ctrl.hold('offhand', ':spear')"},
+						{"default": "!(ctrl.hold('offhand', ':spear')||ctrl.hold('offhand', ':lance'))"},
 						{"spear_idle": "ctrl.idle"}
 					],
 					"blend_transition": {
@@ -411,8 +410,7 @@
 						{"sword": "ctrl.hold('mainhand', ':sword')"},
 						{"bow": "ctrl.hold('mainhand', ':bow')"},
 						{"shield": "ctrl.hold('mainhand', ':shield')"},
-						{"spear": "ctrl.hold('mainhand', ':spear')"},
-						{"lance": "ctrl.hold('mainhand', ':lance')"},
+						{"spear": "ctrl.hold('mainhand', ':spear')||ctrl.hold('mainhand', ':lance')"},
 						{"pickaxe": "ctrl.hold('mainhand', ':pickaxe')"},
 						{"shovel": "ctrl.hold('mainhand', ':shovel')||ctrl.hold('mainhand', ':spade')"},
 						{"hoe": "ctrl.hold('mainhand', ':hoe')"},
@@ -527,7 +525,7 @@
 					"transitions": [
 						{"spear_not_idle": "q.all_animations_finished&&!ctrl.idle"},
 						{"spear_idle": "q.all_animations_finished&&ctrl.idle"},
-						{"default": "!ctrl.hold('mainhand', ':spear')"}
+						{"default": "!(ctrl.hold('mainhand', ':spear')||ctrl.hold('mainhand', ':lance'))"}
 					],
 					"blend_transition": {
 						"0.0": 1,
@@ -546,7 +544,7 @@
 				"spear_idle": {
 					"animations": ["hold_mainhand:spear_idle"],
 					"transitions": [
-						{"default": "!ctrl.hold('mainhand', ':spear')"},
+						{"default": "!(ctrl.hold('mainhand', ':spear')||ctrl.hold('mainhand', ':lance'))"},
 						{"spear_not_idle": "!ctrl.idle"}
 					],
 					"blend_transition": {
@@ -566,7 +564,7 @@
 				"spear_not_idle": {
 					"animations": ["hold_mainhand:spear_not_idle"],
 					"transitions": [
-						{"default": "!ctrl.hold('mainhand', ':spear')"},
+						{"default": "!(ctrl.hold('mainhand', ':spear')||ctrl.hold('mainhand', ':lance'))"},
 						{"spear_idle": "ctrl.idle"}
 					],
 					"blend_transition": {

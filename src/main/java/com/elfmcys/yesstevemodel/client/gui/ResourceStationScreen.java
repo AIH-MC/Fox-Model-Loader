@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -68,6 +69,9 @@ public class ResourceStationScreen extends Screen {
     private int sourceIndex;
     private boolean loading;
     private boolean active;
+    private boolean queuedListRefresh;
+    private int listRequestId;
+    private final ConcurrentLinkedQueue<ListResult> pendingListResults = new ConcurrentLinkedQueue<>();
     private SortMode sortMode = SortMode.NAME;
     private Component status = Component.empty();
     private ChatFormatting statusColor = ChatFormatting.GRAY;
@@ -196,10 +200,15 @@ public class ResourceStationScreen extends Screen {
             ModelRepoEntry entry = visible.get(index);
             int y = entryY(i);
             int buttonX = entryButtonX();
-            int retryW = retryButtonWidth();
             int downloadW = downloadButtonWidth();
-            addRenderableWidget(new FlatColorButton(buttonX, y + 5, downloadW, 18, Component.translatable("gui.yes_steve_model.resource_station.download"), b -> enqueue(entry)));
-            addRenderableWidget(new FlatColorButton(buttonX + downloadW + 4, y + 5, retryW, 18, Component.translatable("gui.yes_steve_model.resource_station.retry"), b -> enqueue(entry)));
+            boolean queued = isQueued(entry);
+            FlatColorButton downloadButton = new FlatColorButton(buttonX, y + 5, downloadW, 18,
+                    queued
+                            ? Component.translatable("gui.yes_steve_model.resource_station.queued_short")
+                            : Component.translatable("gui.yes_steve_model.resource_station.download"),
+                    b -> enqueue(entry));
+            downloadButton.active = !queued;
+            addRenderableWidget(downloadButton);
             ensurePreview(entry);
         }
     }
@@ -207,50 +216,81 @@ public class ResourceStationScreen extends Screen {
     @Override
     public void removed() {
         this.active = false;
+        this.listRequestId++;
+        this.pendingListResults.clear();
     }
 
     @Override
     public void tick() {
         super.tick();
+        applyPendingListResult();
         ResourceDownloadManager.tick();
     }
 
     private void refresh() {
+        saveUrl();
         if (this.loading) {
+            this.queuedListRefresh = true;
+            this.status = Component.translatable("gui.yes_steve_model.resource_station.loading");
+            this.statusColor = ChatFormatting.YELLOW;
             return;
         }
-        saveUrl();
-        String requestUrl = this.config.selectedUrl();
+        startListRefresh();
+    }
+
+    private void startListRefresh() {
+        ResourceStationConfig.State requestConfig = this.config;
+        String requestUrl = requestConfig.selectedUrl();
+        int requestId = ++this.listRequestId;
         this.loading = true;
+        this.queuedListRefresh = false;
+        this.entries.clear();
+        this.previewTextures.clear();
+        this.loadingPreviews.clear();
+        this.page = 0;
         this.status = Component.translatable("gui.yes_steve_model.resource_station.loading");
         this.statusColor = ChatFormatting.YELLOW;
         CompletableFuture.supplyAsync(() -> {
             try {
-                return ModelRepoClient.list(requestUrl, this.config);
+                return ModelRepoClient.list(requestUrl, requestConfig);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }, RESOURCE_EXECUTOR).orTimeout(taskTimeoutMs(), TimeUnit.MILLISECONDS).whenComplete((result, error) -> Minecraft.getInstance().execute(() -> {
-            if (!this.active) {
+        }, RESOURCE_EXECUTOR).whenComplete((result, error) -> this.pendingListResults.add(new ListResult(requestId, requestUrl, result, error)));
+    }
+
+    private void applyPendingListResult() {
+        ListResult result;
+        while ((result = this.pendingListResults.poll()) != null) {
+            if (applyListResult(result)) {
                 return;
             }
-            this.loading = false;
-            if (!Objects.equals(this.config.selectedUrl(), requestUrl)) {
-                refresh();
-                return;
-            }
-            if (error != null) {
-                this.status = Component.translatable("gui.yes_steve_model.resource_station.error", rootMessage(error));
-                this.statusColor = ChatFormatting.RED;
-            } else {
-                this.entries.clear();
-                this.entries.addAll(result);
-                this.page = 0;
-                this.status = Component.translatable("gui.yes_steve_model.resource_station.loaded", result.size());
-                this.statusColor = ChatFormatting.GREEN;
-            }
-            init();
-        }));
+        }
+    }
+
+    private boolean applyListResult(ListResult result) {
+        if (!this.active || result.requestId != this.listRequestId) {
+            return false;
+        }
+        this.loading = false;
+        if (!Objects.equals(this.config.selectedUrl(), result.sourceUrl) || this.queuedListRefresh) {
+            startListRefresh();
+            return true;
+        }
+        if (result.error != null) {
+            this.status = Component.translatable("gui.yes_steve_model.resource_station.error", rootMessage(result.error));
+            this.statusColor = ChatFormatting.RED;
+        } else {
+            this.entries.clear();
+            this.previewTextures.clear();
+            this.loadingPreviews.clear();
+            this.entries.addAll(result.entries);
+            this.page = 0;
+            this.status = Component.translatable("gui.yes_steve_model.resource_station.loaded", result.entries.size());
+            this.statusColor = ChatFormatting.GREEN;
+        }
+        init();
+        return true;
     }
 
     private void enqueue(ModelRepoEntry entry) {
@@ -327,12 +367,8 @@ public class ResourceStationScreen extends Screen {
         return buttonWidth(Component.translatable("gui.yes_steve_model.resource_station.download"), this.guiWidth >= 420 ? 44 : 42, 74);
     }
 
-    private int retryButtonWidth() {
-        return buttonWidth(Component.translatable("gui.yes_steve_model.resource_station.retry"), this.guiWidth >= 420 ? 44 : 32, 62);
-    }
-
     private int entryButtonAreaWidth() {
-        return Math.max(ENTRY_BUTTON_AREA_WIDTH, downloadButtonWidth() + retryButtonWidth() + 4);
+        return Math.max(ENTRY_BUTTON_AREA_WIDTH, downloadButtonWidth());
     }
 
     private void setMainlandChinaMode(boolean mainlandChinaMode) {
@@ -397,6 +433,7 @@ public class ResourceStationScreen extends Screen {
         this.entries.clear();
         this.previewTextures.clear();
         this.loadingPreviews.clear();
+        this.pendingListResults.clear();
         this.page = 0;
         init();
     }
@@ -434,13 +471,14 @@ public class ResourceStationScreen extends Screen {
         if (entry.previewUrl() == null || entry.previewUrl().isBlank() || this.previewTextures.containsKey(entry.previewUrl()) || !this.loadingPreviews.add(entry.previewUrl())) {
             return;
         }
+        ResourceStationConfig.State requestConfig = this.config;
         CompletableFuture.supplyAsync(() -> {
             try {
-                return ModelRepoClient.downloadPreview(entry, this.config);
+                return ModelRepoClient.downloadPreview(entry, requestConfig);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }, RESOURCE_EXECUTOR).orTimeout(Math.max(10_000L, this.config.timeoutMs() * 2L), TimeUnit.MILLISECONDS).whenComplete((data, error) -> Minecraft.getInstance().execute(() -> {
+        }, RESOURCE_EXECUTOR).orTimeout(Math.max(10_000L, requestConfig.timeoutMs() * 2L), TimeUnit.MILLISECONDS).whenComplete((data, error) -> Minecraft.getInstance().execute(() -> {
             this.loadingPreviews.remove(entry.previewUrl());
             if (!this.active || error != null) {
                 return;
@@ -597,10 +635,6 @@ public class ResourceStationScreen extends Screen {
         return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
     }
 
-    private long taskTimeoutMs() {
-        return Math.max(15_000L, this.config.timeoutMs() * 4L);
-    }
-
     private static String sha1(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-1");
@@ -615,14 +649,17 @@ public class ResourceStationScreen extends Screen {
         SIZE("size"),
         SOURCE("source");
 
-        private final String label;
+        private final String key;
 
-        SortMode(String label) {
-            this.label = label;
+        SortMode(String key) {
+            this.key = key;
         }
 
-        private String label() {
-            return this.label;
+        private Component label() {
+            return Component.translatable("gui.yes_steve_model.resource_station.sort." + this.key);
         }
+    }
+
+    private record ListResult(int requestId, String sourceUrl, List<ModelRepoEntry> entries, Throwable error) {
     }
 }

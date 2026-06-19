@@ -182,6 +182,10 @@ public class PredicateBasedController<T extends AnimatableEntity<?>> implements 
         this.transitionInterpolator.setAnimation(animation, loopType);
     }
 
+    public void setAnimationTickOverride(float tick) {
+        this.transitionInterpolator.setAnimationTickOverride(tick);
+    }
+
     public void setTransitionLengthTicks(float ticks) {
         if (this.transitionInterpolator.getInterpolated() != ticks) {
             this.transitionInterpolator.setTransitionInterpolator(new TicksInterpolator(ticks));

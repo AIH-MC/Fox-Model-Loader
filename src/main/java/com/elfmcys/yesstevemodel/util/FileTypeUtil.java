@@ -19,7 +19,7 @@ public final class FileTypeUtil {
 
     public static final String DEFAULT_TEXTURE = "default";
 
-    private static final Set<String> ARCHIVE_EXTENSIONS = Sets.newHashSet(".zip", ".7z", ".ysm");
+    private static final Set<String> ARCHIVE_EXTENSIONS = Sets.newHashSet(".zip", ".ysm");
 
     public static int parseHexId(String str) {
         return Integer.parseUnsignedInt(str.substring(0, 8), 16);

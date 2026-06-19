@@ -31,6 +31,10 @@ public final class MovementQuery {
             return trackerDelta;
         }
 
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            return Vec3.ZERO;
+        }
+
         Vec3 tickDelta = sanitize(new Vec3(entity.getX() - entity.xo, entity.getY() - entity.yo, entity.getZ() - entity.zo));
         if (hasMovement(tickDelta)) {
             return tickDelta;
@@ -52,15 +56,18 @@ public final class MovementQuery {
         }
 
         boolean suppressSyntheticWalk = shouldSuppressSyntheticWalk(tracker);
+        if (suppressSyntheticWalk) {
+            return 0.0f;
+        }
 
-        if (event != null && !suppressSyntheticWalk) {
+        if (event != null) {
             float limbSwingAmount = Math.abs(event.getLimbSwingAmount());
             if (isUsable(limbSwingAmount)) {
                 return limbSwingAmount;
             }
         }
 
-        if (entity instanceof LivingEntity livingEntity && !suppressSyntheticWalk) {
+        if (entity instanceof LivingEntity livingEntity) {
             float partialTick = event != null ? event.getPartialTick() : 1.0f;
             float walkSpeed = Math.abs(livingEntity.walkAnimation.speed(partialTick));
             if (isUsable(walkSpeed)) {
@@ -84,6 +91,10 @@ public final class MovementQuery {
         float trackerSpeed = getHorizontalSpeedFromDelta(trackerDelta, tracker);
         if (isUsable(trackerSpeed)) {
             return trackerSpeed;
+        }
+
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            return 0.0f;
         }
 
         Vec3 deltaMovement = sanitize(entity.getDeltaMovement());
@@ -120,6 +131,11 @@ public final class MovementQuery {
     }
 
     public static float getDeltaMovementLength(Entity entity, EntityFrameStateTracker<?> tracker) {
+        if (shouldSuppressSyntheticWalk(tracker)) {
+            Vec3 trackerDelta = sanitize(tracker.getPositionDelta());
+            return hasMovement(trackerDelta) ? (float) trackerDelta.length() : 0.0f;
+        }
+
         Vec3 deltaMovement = sanitize(entity.getDeltaMovement());
         if (hasMovement(deltaMovement)) {
             return (float) deltaMovement.length();
