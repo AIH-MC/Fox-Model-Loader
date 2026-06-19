@@ -1,7 +1,11 @@
 package com.elfmcys.yesstevemodel.geckolib3.core.controller;
 
 import com.elfmcys.yesstevemodel.audio.PlaybackFlags;
+import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.client.animation.IAnimationPredicate;
+import com.elfmcys.yesstevemodel.client.entity.GeoEntity;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
+import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.geckolib3.core.keyframe.ConstantPoint;
 import com.elfmcys.yesstevemodel.geckolib3.core.keyframe.TransitionPoint;
 import com.elfmcys.yesstevemodel.geckolib3.core.AnimatableEntity;
@@ -29,6 +33,10 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 public class PredicateBasedController<T extends AnimatableEntity<?>> implements IAnimationController<T> {
+
+    private static final String PLAYER_SWING_CONTROLLER = "player.swing";
+
+    private static int swingProcessDebugLogs;
 
     private final String name;
 
@@ -64,7 +72,9 @@ public class PredicateBasedController<T extends AnimatableEntity<?>> implements 
     @Override
     public void process(AnimationEvent<T> event, ExpressionEvaluator<AnimationContext<?>> evaluator, boolean isMoving) {
         event.setController(this);
-        PlayState playState = handleSoundExpression(evaluator);
+        boolean forceSwingPredicate = shouldForceSwingPredicate();
+        debugSwingProcess(event, isMoving, forceSwingPredicate);
+        PlayState playState = forceSwingPredicate ? null : handleSoundExpression(evaluator);
         if (playState == null) {
             playState = this.predicate.predicate(event, evaluator);
         }
@@ -88,6 +98,30 @@ public class PredicateBasedController<T extends AnimatableEntity<?>> implements 
             this.needsReset = true;
         }
         event.getAnimatable().setAnimationState(this.name, this.transitionInterpolator.getAnimationState());
+    }
+
+    private boolean shouldForceSwingPredicate() {
+        return PLAYER_SWING_CONTROLLER.equals(this.name) && InputStateKey.isLocalAnyHandSwinging();
+    }
+
+    private void debugSwingProcess(AnimationEvent<T> event, boolean isMoving, boolean forceSwingPredicate) {
+        if (!PLAYER_SWING_CONTROLLER.equals(this.name)
+                || !GeneralConfig.safeGet(GeneralConfig.INPUT_STATE_DEBUG_LOG, false)
+                || InputStateKey.getLocalSwingPulseTicks() <= 0
+                || swingProcessDebugLogs++ >= 80) {
+            return;
+        }
+        YesSteveModel.LOGGER.info("[YSM-INPUT] swing-controller-process animatable={} entityId={} model={} moving={} forcePredicate={} hasSoundExpr={} state={} animation={} localPulse={} localAge={}",
+                event.getAnimatable().getClass().getSimpleName(),
+                event.getAnimatable().getEntity().getId(),
+                event.getAnimatable() instanceof GeoEntity<?> geoEntity ? geoEntity.getModelId() : "-",
+                isMoving,
+                forceSwingPredicate,
+                this.soundIValue != null,
+                this.transitionInterpolator.getAnimationState(),
+                this.transitionInterpolator.getCurrentAnimation() == null ? "null" : this.transitionInterpolator.getCurrentAnimation().animationName,
+                InputStateKey.getLocalSwingPulseTicks(),
+                InputStateKey.getLocalSwingPulseAge());
     }
 
     @Nullable
@@ -146,6 +180,10 @@ public class PredicateBasedController<T extends AnimatableEntity<?>> implements 
 
     public void setAnimation(String animation, @Nullable ILoopType loopType) {
         this.transitionInterpolator.setAnimation(animation, loopType);
+    }
+
+    public void setAnimationTickOverride(float tick) {
+        this.transitionInterpolator.setAnimationTickOverride(tick);
     }
 
     public void setTransitionLengthTicks(float ticks) {

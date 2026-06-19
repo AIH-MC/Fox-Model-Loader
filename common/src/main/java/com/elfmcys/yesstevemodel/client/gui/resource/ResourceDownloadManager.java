@@ -15,7 +15,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public final class ResourceDownloadManager {
     private static final int HISTORY_LIMIT = 128;
@@ -177,6 +176,9 @@ public final class ResourceDownloadManager {
                     public void onProgress(int downloaded, int total, long bytesPerSecond) {
                         int progressTotal = progressTotal(total, task.entry.size());
                         synchronized (LOCK) {
+                            if (currentTask != task || task.state != TaskState.DOWNLOADING) {
+                                return;
+                            }
                             task.progress = progressTotal > 0 ? Math.min(1f, (float) downloaded / progressTotal) : task.progress;
                             String bytes = ModelUploadSession.formatBytes(downloaded) + (total > 0 ? "/" + ModelUploadSession.formatBytes(total) : "");
                             String speed = bytesPerSecond > 0 ? " " + ModelRepoClient.formatSpeed(bytesPerSecond) : "";
@@ -192,6 +194,9 @@ public final class ResourceDownloadManager {
                     public void onCandidate(String url, int index, int total) {
                         this.host = ModelRepoClient.hostName(url);
                         synchronized (LOCK) {
+                            if (currentTask != task || task.state != TaskState.DOWNLOADING) {
+                                return;
+                            }
                             task.message = Component.translatable("gui.yes_steve_model.resource_station.try_source", index, total, this.host);
                             status = task.message;
                             statusColor = ChatFormatting.YELLOW;
@@ -202,7 +207,7 @@ public final class ResourceDownloadManager {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }, DOWNLOAD_EXECUTOR).orTimeout(taskTimeoutMs(task.config), TimeUnit.MILLISECONDS).whenComplete((data, error) ->
+        }, DOWNLOAD_EXECUTOR).whenComplete((data, error) ->
                 ((Executor) Minecraft.getInstance()).execute(() -> onDownloadFinished(task, data, error)));
     }
 
@@ -370,10 +375,6 @@ public final class ResourceDownloadManager {
         for (Runnable listener : LISTENERS) {
             listener.run();
         }
-    }
-
-    private static long taskTimeoutMs(ResourceStationConfig.State config) {
-        return Math.max(15_000L, config.timeoutMs() * 4L);
     }
 
     private static int progressTotal(int contentLength, long entrySize) {

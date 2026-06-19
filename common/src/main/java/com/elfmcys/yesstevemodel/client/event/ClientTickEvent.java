@@ -5,6 +5,7 @@ import com.elfmcys.yesstevemodel.audio.ObjectPool;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.client.gui.resource.ResourceDownloadManager;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
 import com.elfmcys.yesstevemodel.client.upload.UploadManager;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,7 @@ public final class ClientTickEvent {
             return;
         }
         tickCount++;
+        InputStateKey.tick();
         UploadManager.processPendingUploads();
         ResourceDownloadManager.tick();
         ModelUploadSession.tickCurrent();

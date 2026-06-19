@@ -26,6 +26,7 @@ public final class PlayerModelSelectionStore {
     private static final String PLAYERS = "players";
     private static final String MODEL_ID = "model_id";
     private static final String SELECT_TEXTURE = "select_texture";
+    private static final String DISABLED = "disabled";
     private static final String NAME = "name";
     private static final String UPDATED_AT = "updated_at";
 
@@ -54,6 +55,7 @@ public final class PlayerModelSelectionStore {
 
         String modelId = getString(entry, MODEL_ID);
         String textureId = getString(entry, SELECT_TEXTURE);
+        boolean disabled = getBoolean(entry, DISABLED, false);
         if (modelId == null || modelId.isBlank()) {
             removeSelection(player.getUUID());
             return false;
@@ -73,13 +75,19 @@ public final class PlayerModelSelectionStore {
             NetworkOnlineDebugLog.info("Restored persisted player model: player={} uuid={} modelId={} texture={}",
                     player.getName().getString(), player.getUUID(), modelId, resolvedTexture);
         }
+        if (modelInfoCap.isDisabled() != disabled) {
+            modelInfoCap.setDisabled(disabled);
+            NetworkOnlineDebugLog.info("Restored persisted player model disabled state: player={} uuid={} disabled={}",
+                    player.getName().getString(), player.getUUID(), disabled);
+        }
         return true;
     }
 
     public static synchronized void saveCurrentSelection(ServerPlayer player, ModelInfoCapability modelInfoCap) {
         String modelId = modelInfoCap.getModelId();
         String textureId = modelInfoCap.getSelectTexture();
-        if (modelId == null || modelId.isBlank() || textureId == null || textureId.isBlank() || isDefaultSelection(modelId, textureId)) {
+        boolean disabled = modelInfoCap.isDisabled();
+        if (modelId == null || modelId.isBlank() || textureId == null || textureId.isBlank() || (isDefaultSelection(modelId, textureId) && !disabled)) {
             removeSelection(player.getUUID());
             return;
         }
@@ -88,11 +96,14 @@ public final class PlayerModelSelectionStore {
         entry.addProperty(NAME, player.getName().getString());
         entry.addProperty(MODEL_ID, modelId);
         entry.addProperty(SELECT_TEXTURE, textureId);
+        if (disabled) {
+            entry.addProperty(DISABLED, true);
+        }
         entry.addProperty(UPDATED_AT, System.currentTimeMillis());
         getPlayers().add(player.getUUID().toString(), entry);
         save();
-        NetworkOnlineDebugLog.info("Saved persisted player model: player={} uuid={} modelId={} texture={}",
-                player.getName().getString(), player.getUUID(), modelId, textureId);
+        NetworkOnlineDebugLog.info("Saved persisted player model: player={} uuid={} modelId={} texture={} disabled={}",
+                player.getName().getString(), player.getUUID(), modelId, textureId, disabled);
     }
 
     private static boolean isDefaultSelection(String modelId, String textureId) {
@@ -130,6 +141,14 @@ public final class PlayerModelSelectionStore {
             return null;
         }
         return element.getAsString();
+    }
+
+    private static boolean getBoolean(JsonObject object, String key, boolean defaultValue) {
+        JsonElement element = object.get(key);
+        if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isBoolean()) {
+            return defaultValue;
+        }
+        return element.getAsBoolean();
     }
 
     private static void removeSelection(UUID uuid) {

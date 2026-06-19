@@ -152,7 +152,7 @@ public class AnimatedGeoModel {
     }
 
     @NotNull
-    public List<List<IBone>> rightHandChain() {
+    public List<List<IBone>> leftHandChains() {
         return this.leftHandGroupChains;
     }
 
@@ -162,7 +162,7 @@ public class AnimatedGeoModel {
     }
 
     @NotNull
-    public List<List<IBone>> leftHandChains() {
+    public List<List<IBone>> rightHandChains() {
         return this.rightHandGroupChains;
     }
 

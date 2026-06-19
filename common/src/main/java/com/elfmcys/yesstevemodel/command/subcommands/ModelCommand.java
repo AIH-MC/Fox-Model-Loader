@@ -163,6 +163,8 @@ public class ModelCommand {
         String str2 = str;
         targets.forEach(player -> ModelInfoCapability.get(player).ifPresent(cap -> {
             cap.setDisabled(bool);
+            PlayerModelSelectionStore.saveCurrentSelection(player, cap);
+            PlayerDataSaveBridge.save(player);
             context.getSource().sendSuccess(() -> Component.translatable(str2, player.getScoreboardName()), true);
         }));
         return Command.SINGLE_SUCCESS;

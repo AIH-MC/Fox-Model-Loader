@@ -1,11 +1,12 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
-import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
+import com.elfmcys.yesstevemodel.client.gui.button.IconButton;
 import com.elfmcys.yesstevemodel.client.upload.ModelImportFilePicker;
 import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.util.ModelIdUtil;
+import com.elfmcys.yesstevemodel.util.PerformanceProfiler;
 import com.elfmcys.yesstevemodel.util.PlatformUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -19,9 +20,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Queue;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 public class ModelUploadScreen extends Screen implements ModelUploadSession.Listener {
@@ -29,6 +32,7 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
     private static final long MODEL_FOLDER_POLL_WINDOW_MS = 60000L;
     private final Screen parentScreen;
     private final Queue<ModelImportFilePicker.PickedFile> pendingImports = new ArrayDeque<>();
+    private final Queue<LocalUploadFile> pendingLocalUploads = new ArrayDeque<>();
     private long lastFlashTime = 0L;
     private Component error = Component.empty();
     private Component localStatus = Component.empty();
@@ -48,6 +52,11 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
         this.parentScreen = parent;
     }
 
+    public ModelUploadScreen(Screen parent, Collection<String> localModelIds) {
+        this(parent);
+        enqueueLocalModels(localModelIds);
+    }
+
     private static void drawBorder(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int w, int color) {
         g.fill(x1, y1, x2, y1 + w, color);
         g.fill(x1, y2 - w, x2, y2, color);
@@ -60,9 +69,10 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
         clearWidgets();
         ModelUploadSession.addListener(this);
         int buttonY = 10;
-        addRenderableWidget(new FlatColorButton(this.width - 350, buttonY, 130, 18, Component.translatable("gui.yes_steve_model.import.choose_file"), button -> openFilePicker()));
-        addRenderableWidget(new FlatColorButton(this.width - 210, buttonY, 130, 18, Component.translatable("gui.yes_steve_model.open_model_folder.open"), button -> openModelFolder()));
-        addRenderableWidget(new FlatColorButton(this.width - 70, buttonY, 60, 18, Component.translatable("gui.yes_steve_model.model.return"), button -> Minecraft.getInstance().setScreen(this.parentScreen)));
+        int toolbarX = Math.max(10, this.width - 76);
+        addRenderableWidget(new IconButton(toolbarX, buttonY, 18, 18, 0, 16, button -> openFilePicker()).setTooltipText("gui.yes_steve_model.import.choose_file"));
+        addRenderableWidget(new IconButton(toolbarX + 24, buttonY, 18, 18, 128, 48, button -> openModelFolder()).setTooltipText("gui.yes_steve_model.open_model_folder.open"));
+        addRenderableWidget(new IconButton(toolbarX + 48, buttonY, 18, 18, 0, 32, button -> Minecraft.getInstance().setScreen(this.parentScreen)).setTooltipText("gui.yes_steve_model.model.return"));
     }
 
     @Override
@@ -193,7 +203,7 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
 
     private static String stripImportExtension(String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
-        for (String extension : new String[]{".ysm", ".zip", ".7z"}) {
+        for (String extension : new String[]{".ysm", ".zip"}) {
             if (lower.endsWith(extension)) {
                 return fileName.substring(0, fileName.length() - extension.length());
             }
@@ -205,12 +215,90 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
         return stripImportExtension(ModelIdUtil.normalizeImportModelId(text));
     }
 
+    private void enqueueLocalModels(Collection<String> modelIds) {
+        if (modelIds == null || modelIds.isEmpty()) {
+            return;
+        }
+        int queued = 0;
+        for (String modelId : modelIds) {
+            if (!ClientModelManager.isLocalOnlyModel(modelId)) {
+                continue;
+            }
+            Optional<Path> source = ClientModelManager.getLocalModelSourcePath(modelId);
+            if (source.isEmpty()) {
+                this.error = Component.translatable("gui.yes_steve_model.import.error.local_source_missing", modelId);
+                continue;
+            }
+            try {
+                Path path = source.get();
+                if (Files.isDirectory(path)) {
+                    ModelImportFilePicker.PickedFile packed = ModelImportFilePicker.packDirectory(path);
+                    this.pendingLocalUploads.add(new LocalUploadFile(modelId, modelId + ".zip", packed.data()));
+                    queued++;
+                    continue;
+                }
+                String ext = importExtension(path);
+                if (ext.isBlank()) {
+                    this.error = Component.translatable("gui.yes_steve_model.import.error.invalid_extension");
+                    continue;
+                }
+                this.pendingLocalUploads.add(new LocalUploadFile(modelId, modelId + ext, Files.readAllBytes(path)));
+                queued++;
+            } catch (IOException e) {
+                this.error = Component.translatable("gui.yes_steve_model.import.error.read_file", e.getMessage());
+            }
+        }
+        if (queued > 0) {
+            this.localStatus = Component.translatable("gui.yes_steve_model.import.state.local_upload_queued", queued);
+            this.localStatusColor = ChatFormatting.YELLOW;
+        }
+    }
+
+    private boolean uploadLocalModelFile(LocalUploadFile file) {
+        this.error = Component.empty();
+        this.lastFlashTime = PlatformUtil.getMillis();
+        ModelUploadSession existing = ModelUploadSession.getInstance();
+        if (existing != null && !existing.isTerminal()) {
+            this.error = Component.translatable("gui.yes_steve_model.import.error.in_progress");
+            return false;
+        }
+        this.localStatus = Component.translatable("gui.yes_steve_model.import.state.local_upload_ready", file.modelId());
+        this.localStatusColor = ChatFormatting.GREEN;
+        Component uploadError = ModelUploadSession.start(file.modelId(), file.fileName(), file.data());
+        if (uploadError != null) {
+            this.serverStatus = Component.translatable("gui.yes_steve_model.import.state.server_upload_failed", uploadError);
+            this.serverStatusColor = ChatFormatting.RED;
+            return false;
+        }
+        this.serverStatus = Component.translatable("gui.yes_steve_model.import.state.server_uploading");
+        this.serverStatusColor = ChatFormatting.YELLOW;
+        return true;
+    }
+
+    private static String importExtension(Path path) {
+        String lower = path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".ysm")) {
+            return ".ysm";
+        }
+        if (lower.endsWith(".zip")) {
+            return ".zip";
+        }
+        return "";
+    }
+
     private void startNextImportIfIdle() {
         if (this.localImportInProgress) {
             return;
         }
         ModelUploadSession existing = ModelUploadSession.getInstance();
         if (existing != null && !existing.isTerminal()) {
+            return;
+        }
+        LocalUploadFile localUpload = this.pendingLocalUploads.poll();
+        if (localUpload != null) {
+            if (!uploadLocalModelFile(localUpload)) {
+                this.pendingLocalUploads.clear();
+            }
             return;
         }
         ModelImportFilePicker.PickedFile next = this.pendingImports.poll();
@@ -267,14 +355,20 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
         if (root == null || !Files.isDirectory(root)) {
             return 0L;
         }
+        long perfStart = PerformanceProfiler.start();
         long result = 1125899906842597L;
         try (Stream<Path> stream = Files.walk(root, 6)) {
-            for (Path path : stream.toList()) {
+            int count = 0;
+            for (var iterator = stream.iterator(); iterator.hasNext(); ) {
+                Path path = iterator.next();
                 BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
                 result = result * 31 + root.relativize(path).toString().hashCode();
                 result = result * 31 + attrs.lastModifiedTime().toMillis();
                 result = result * 31 + attrs.size();
+                count++;
             }
+            PerformanceProfiler.logElapsed("model_folder_stamp", root.getFileName() == null ? "custom" : root.getFileName().toString(),
+                    perfStart, "paths=" + count);
         }
         return result;
     }
@@ -433,6 +527,9 @@ public class ModelUploadScreen extends Screen implements ModelUploadSession.List
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    private record LocalUploadFile(String modelId, String fileName, byte[] data) {
     }
 
     @Override

@@ -373,7 +373,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             GeneralConfig.SHOW_MODEL_ID_FIRST.set(v);
             GeneralConfig.SHOW_MODEL_ID_FIRST.save();
         }).build());
-        FlatColorButton selectButton = new FlatColorButton(this.guiLeft + 132, this.guiTop - 18, 44, 14, Component.translatable("gui.yes_steve_model.model_select.select"), button -> {
+        IconButton selectButton = new IconButton(this.guiLeft + 132, this.guiTop - 20, 18, 18, 0, 48, button -> {
             this.selectionMode = !this.selectionMode;
             if (!this.selectionMode) {
                 this.selectedModelIds.clear();
@@ -381,15 +381,16 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             init();
         });
         selectButton.setSelected(this.selectionMode);
+        selectButton.setTooltipText("gui.yes_steve_model.model_select.tooltip.select");
         addRenderableWidget(selectButton);
-        addRenderableWidget(new IconButton(this.guiLeft + 328, this.guiTop + 5, 18, 18, 32, 0, button4 -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 324, this.guiTop + 5, 18, 18, 32, 0, button4 -> {
             if (this.category != Category.ALL) {
                 this.category = Category.ALL;
                 resetCurrentPage();
                 init();
             }
         }).setTooltipText("gui.yes_steve_model.all_models"));
-        addRenderableWidget(new IconButton(this.guiLeft + 308, this.guiTop + 5, 18, 18, 48, 0, button5 -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 306, this.guiTop + 5, 18, 18, 48, 0, button5 -> {
             if (this.category != Category.AUTH) {
                 this.category = Category.AUTH;
                 resetCurrentPage();
@@ -403,29 +404,36 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
                 init();
             }
         }).setTooltipText("gui.yes_steve_model.star_models"));
-        addRenderableWidget(new IconButton(this.guiLeft + 397, this.guiTop + 5, 18, 18, 16, 16, button7 -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 396, this.guiTop + 5, 18, 18, 16, 16, button7 -> {
             Minecraft.getInstance().setScreen(new ExtraPlayerConfigScreen(this));
         }).setTooltipText("gui.yes_steve_model.config"));
-        IconButton importButton = new IconButton(this.guiLeft + 377, this.guiTop + 5, 18, 18, 0, 16, button8 -> {
+        IconButton importButton = new IconButton(this.guiLeft + 360, this.guiTop + 5, 18, 18, 0, 16, button8 -> {
             Minecraft.getInstance().setScreen(new ModelUploadScreen(this));
         });
         importButton.setTooltipLines(java.util.Collections.singletonList(getImportTooltip()));
         addRenderableWidget(importButton);
-        addRenderableWidget(new IconButton(this.guiLeft + 357, this.guiTop + 5, 18, 18, 16, 0, button9 -> {
+        IconButton customFolderUploadButton = new IconButton(this.guiLeft + 378, this.guiTop + 5, 18, 18, 96, 16, btn -> {
+            Minecraft.getInstance().setScreen(new CustomFolderUploadScreen(this));
+        });
+        customFolderUploadButton.setTooltipLines(java.util.Collections.singletonList(getCustomFolderUploadTooltip()));
+        addRenderableWidget(customFolderUploadButton);
+        addRenderableWidget(new IconButton(this.guiLeft + 342, this.guiTop + 5, 18, 18, 80, 32, button9 -> {
             Minecraft.getInstance().setScreen(new ResourceStationScreen(this));
         }).setTooltipText("gui.yes_steve_model.resource_station.tooltip"));
         if (this.selectionMode) {
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.delete"), button -> runDeleteSelection()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 41, this.guiTop + 253, 34, 14, Component.translatable("gui.yes_steve_model.model_select.move"), button -> runMoveSelection()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 77, this.guiTop + 253, 44, 14, Component.translatable("gui.yes_steve_model.model_select.new_category"), button -> runCreateCategory()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 123, this.guiTop + 253, 44, 14, Component.translatable("gui.yes_steve_model.model_select.rename_category"), button -> runRenameCategory()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 5, this.guiTop + 270, 44, 14, Component.translatable("gui.yes_steve_model.model_select.delete_category"), button -> runDeleteCategory()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 51, this.guiTop + 270, 38, 14, Component.translatable("gui.yes_steve_model.model_select.select_all"), button -> selectAllFilteredModels()));
-            addRenderableWidget(new FlatColorButton(this.guiLeft + 91, this.guiTop + 270, 38, 14, Component.translatable("gui.yes_steve_model.model_select.cancel"), button -> {
+            int selectionToolbarX = this.guiLeft + 153;
+            int selectionToolbarY = this.guiTop - 19;
+            addRenderableWidget(new IconButton(selectionToolbarX, selectionToolbarY, 16, 16, 16, 48, button -> runDeleteSelection()).setTooltipText("gui.yes_steve_model.model_select.tooltip.delete"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 19, selectionToolbarY, 16, 16, 32, 48, button -> runMoveSelection()).setTooltipText("gui.yes_steve_model.model_select.tooltip.move"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 38, selectionToolbarY, 16, 16, 48, 48, button -> runCreateCategory()).setTooltipText("gui.yes_steve_model.model_select.tooltip.new_category"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 57, selectionToolbarY, 16, 16, 64, 48, button -> runRenameCategory()).setTooltipText("gui.yes_steve_model.model_select.tooltip.rename_category"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 76, selectionToolbarY, 16, 16, 80, 48, button -> runDeleteCategory()).setTooltipText("gui.yes_steve_model.model_select.tooltip.delete_category"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 95, selectionToolbarY, 16, 16, 96, 48, button -> selectAllFilteredModels()).setTooltipText("gui.yes_steve_model.model_select.tooltip.select_all"));
+            addRenderableWidget(new IconButton(selectionToolbarX + 114, selectionToolbarY, 16, 16, 112, 48, button -> {
                 this.selectedModelIds.clear();
                 this.selectionMode = false;
                 init();
-            }));
+            }).setTooltipText("gui.yes_steve_model.model_select.tooltip.cancel"));
         }
         addRenderableWidget(new FlatColorButton(this.guiLeft + 198, this.guiTop + 215, 52, 14, Component.translatable("gui.yes_steve_model.pre_page"), button10 -> {
             int currentPage = getCurrentPage();
@@ -552,7 +560,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         Component text = this.selectionStatus.getString().isBlank()
                 ? Component.translatable("gui.yes_steve_model.model_select.count", this.selectedModelIds.size())
                 : this.selectionStatus;
-        guiGraphics.text(this.font, this.font.split(text.copy().withStyle(ChatFormatting.GRAY), 170).get(0), this.guiLeft + 5, this.guiTop + 238, 0xFFF3F3E0);
+        guiGraphics.text(this.font, this.font.split(text.copy().withStyle(ChatFormatting.GRAY), 126).get(0), this.guiLeft + 288, this.guiTop - 15, 0xFFF3F3E0);
     }
 
     private void renderSyncStatus(GuiGraphicsExtractor guiGraphics) {
@@ -593,7 +601,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             int previewTop = this.guiTop + 29;
             int previewRight = this.guiLeft + 130;
             int previewBottom = this.guiTop + 200;
-            if (!ModelPreviewRenderer.renderCustomLocalPlayerPreview(extractor, localPlayer, previewLeft, previewTop, previewRight, previewBottom, (previewLeft + previewRight) * 0.5f, previewTop + 150.0f, 70.0f, 200.0f, partialTick, false)) {
+            if (!ModelPreviewRenderer.renderCustomLocalPlayerPreview(extractor, localPlayer, previewLeft, previewTop, previewRight, previewBottom, (previewLeft + previewRight) * 0.5f, previewTop + 150.0f, 70.0f, 180.0f, partialTick, false, mouseX, mouseY)) {
                 guiGraphics.enableScissor(previewLeft, previewTop, previewRight, previewBottom);
                 try {
                     InventoryScreen.extractEntityInInventoryFollowsMouse(extractor, previewLeft, previewTop, previewRight, previewBottom, 70, mouseX, mouseY, 1.0f, localPlayer);
@@ -698,6 +706,16 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             return Component.translatable("gui.yes_steve_model.import.tooltip.waiting");
         }
         return Component.translatable("gui.yes_steve_model.import.tooltip.disabled");
+    }
+
+    private Component getCustomFolderUploadTooltip() {
+        if (ClientModelManager.isAllowUpload() && ClientModelManager.isOysmServer()) {
+            return Component.translatable("gui.yes_steve_model.upload_custom_folder.tooltip");
+        }
+        if (!ClientModelManager.isOysmServer()) {
+            return Component.translatable("gui.yes_steve_model.upload_custom_folder.tooltip.waiting");
+        }
+        return Component.translatable("gui.yes_steve_model.upload_custom_folder.tooltip.disabled");
     }
 
     private boolean handleToggleKey(KeyEvent event) {

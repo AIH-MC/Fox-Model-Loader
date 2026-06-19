@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.entity;
 
 import com.elfmcys.yesstevemodel.client.animation.debug.AnimationFrameProfiler;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import it.unimi.dsi.fastutil.objects.ObjectListIterator;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
@@ -40,7 +41,7 @@ public class EntityRenderCache {
                     Entity entity = geoEntity.getEntity();
                     if (entity instanceof AbstractClientPlayer) {
                         if (entity instanceof LocalPlayer) {
-                            if (!GeneralConfig.DISABLE_SELF_MODEL.get()) {
+                            if (!GeneralConfig.DISABLE_SELF_MODEL.get() && !InputStateKey.hasLocalInteractionState()) {
                                 geoEntity.submitAsyncUpdate(partialTick);
                                 strongRefs.add(geoEntity);
                             }

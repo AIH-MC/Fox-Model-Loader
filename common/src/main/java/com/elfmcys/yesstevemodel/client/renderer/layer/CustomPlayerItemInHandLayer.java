@@ -5,6 +5,7 @@ import rip.ysm.compat.slashblade.SlashBladeCompat;
 import rip.ysm.compat.gun.swarfare.SWarfareCompat;
 import com.elfmcys.yesstevemodel.client.animation.condition.InnerClassify;
 import com.elfmcys.yesstevemodel.client.entity.CustomPlayerEntity;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.geckolib3.geo.GeoLayerRenderer;
 import com.elfmcys.yesstevemodel.geckolib3.geo.animated.AnimatedGeoModel;
 import rip.ysm.compat.gun.tacz.TacCompat;
@@ -12,11 +13,9 @@ import com.elfmcys.yesstevemodel.client.renderer.SubmitRenderContext;
 import com.elfmcys.yesstevemodel.geckolib3.util.RenderUtils;
 import com.elfmcys.yesstevemodel.util.accessors.BufferSourceAccessor;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.model.effects.SpearAnimations;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
@@ -30,6 +29,13 @@ import org.joml.Matrix4f;
 import rip.ysm.api.item.WeaponKind;
 
 public class CustomPlayerItemInHandLayer extends GeoLayerRenderer<CustomPlayerEntity> {
+
+    private static final float SPEAR_TIRED_TIP_PLANE_ROLL_DEGREES = 90.0f;
+    private static final float SPEAR_ENGAGED_FORWARD_DEGREES = 90.0f;
+    private static final float SPEAR_ENGAGED_TIP_PLANE_COMPENSATION_DEGREES = 60.0f;
+    private static final float SPEAR_DISENGAGED_DOWN_DEGREES = 6.0f;
+    private static final float SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Y = 0.125f;
+    private static final float SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Z = 0.125f;
 
     private final ItemInHandRenderer itemRenderer;
 
@@ -94,7 +100,7 @@ public class CustomPlayerItemInHandLayer extends GeoLayerRenderer<CustomPlayerEn
                 renderVanillaItemWithUseOrientation(livingEntity, itemStack, itemDisplayContext, humanoidArm, poseStack, i, partialTick);
             }
             poseStack.popPose();
-            (isLeftHand ? model.rightHandChain() : model.leftHandChains()).forEach(list -> {
+            (isLeftHand ? model.leftHandChains() : model.rightHandChains()).forEach(list -> {
                 poseStack.pushPose();
                 if (!RenderUtils.prepMatrixForLocator(poseStack, list)) {
                     applyFallbackHandTransform(itemStack, poseStack, false);
@@ -111,7 +117,7 @@ public class CustomPlayerItemInHandLayer extends GeoLayerRenderer<CustomPlayerEn
     private void applyFallbackHandTransform(ItemStack itemStack, PoseStack poseStack, boolean directHandBone) {
         switch (InnerClassify.getWeaponKind(itemStack)) {
             case TRIDENT -> applyTridentHandTransform(poseStack, directHandBone);
-            case LANCE -> applyLanceHandTransform(poseStack, directHandBone);
+            case LANCE, SPEAR -> applyLanceHandTransform(poseStack, directHandBone);
             case MACE -> applyMaceHandTransform(poseStack, directHandBone);
             case NONE -> applyDefaultHandTransform(poseStack);
         }
@@ -144,12 +150,7 @@ public class CustomPlayerItemInHandLayer extends GeoLayerRenderer<CustomPlayerEn
             normalizeBowItemScale(poseStack);
         }
         if (shouldApplySpearUseItemTransform(livingEntity, itemStack, humanoidArm)) {
-            float ticksUsingItem = clampSpearUseTicksBeforeVanillaSway(itemStack, livingEntity.getTicksUsingItem(partialTick));
-            poseStack.mulPose(Axis.YP.rotationDegrees(180.0f));
-            ArmedEntityRenderState renderState = new ArmedEntityRenderState();
-            renderState.attackTime = livingEntity.getAttackAnim(partialTick);
-            renderState.ticksSinceKineticHitFeedback = livingEntity.getTicksSinceLastKineticHitFeedback(partialTick);
-            SpearAnimations.thirdPersonUseItem(renderState, poseStack, ticksUsingItem, humanoidArm, itemStack);
+            applySpearUseItemTransform(livingEntity, itemStack, humanoidArm, poseStack, partialTick);
         }
         renderVanillaItem(livingEntity, itemStack, itemDisplayContext, humanoidArm, poseStack, packedLight);
     }
@@ -178,29 +179,76 @@ public class CustomPlayerItemInHandLayer extends GeoLayerRenderer<CustomPlayerEn
         return (float) Math.sqrt(x * x + y * y + z * z);
     }
 
-    private float clampSpearUseTicksBeforeVanillaSway(ItemStack itemStack, float ticksUsingItem) {
+    private void applySpearUseItemTransform(LivingEntity livingEntity, ItemStack itemStack, HumanoidArm humanoidArm, PoseStack poseStack, float partialTick) {
         KineticWeapon kineticWeapon = itemStack.get(DataComponents.KINETIC_WEAPON);
         if (kineticWeapon == null) {
-            return ticksUsingItem;
+            return;
         }
-        return kineticWeapon.dismountConditions().map(condition -> {
-            float swayStartTicks = kineticWeapon.delayTicks() + condition.maxDurationTicks() - 20.0f;
-            if (swayStartTicks <= 0.0f) {
-                return ticksUsingItem;
-            }
-            float stableUseTicks = Math.max(kineticWeapon.delayTicks(), swayStartTicks - 0.01f);
-            return Math.min(ticksUsingItem, stableUseTicks);
-        }).orElse(ticksUsingItem);
+        float ticksUsingItem = InputStateKey.getTicksUsingItem(livingEntity, partialTick);
+        SpearUseParams useParams = getSpearUseParams(kineticWeapon, ticksUsingItem);
+        float handSign = humanoidArm == HumanoidArm.RIGHT ? 1.0f : -1.0f;
+        float engagedProgress = smoothStep(useParams.engagedProgress());
+        float tiredProgress = smoothStep(useParams.tiredProgress());
+        float disengagedProgress = smoothStep(useParams.disengagedProgress());
+        float engagedTipPlaneCompensation = SPEAR_ENGAGED_TIP_PLANE_COMPENSATION_DEGREES * (1.0f - engagedProgress);
+
+        poseStack.rotateAround(
+                Axis.XP.rotationDegrees(engagedTipPlaneCompensation),
+                0.0f,
+                SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Y,
+                SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Z);
+        poseStack.rotateAround(
+                Axis.YP.rotationDegrees(handSign * (SPEAR_ENGAGED_FORWARD_DEGREES + SPEAR_TIRED_TIP_PLANE_ROLL_DEGREES * tiredProgress)),
+                0.0f,
+                SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Y,
+                SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Z);
+        poseStack.rotateAround(
+                Axis.XP.rotationDegrees(SPEAR_DISENGAGED_DOWN_DEGREES * disengagedProgress),
+                0.0f,
+                SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Y,
+                SPEAR_THIRD_PERSON_DISPLAY_PIVOT_Z);
+    }
+
+    private SpearUseParams getSpearUseParams(KineticWeapon kineticWeapon, float ticksUsingItem) {
+        int finishRaisingTick = kineticWeapon.delayTicks();
+        int finishTiredTick = kineticWeapon.dismountConditions().map(KineticWeapon.Condition::maxDurationTicks).orElse(0) + finishRaisingTick;
+        int finishDisengagedTick = Math.max(
+                finishTiredTick,
+                kineticWeapon.damageConditions().map(KineticWeapon.Condition::maxDurationTicks).orElse(0) + finishRaisingTick);
+        return new SpearUseParams(
+                progress(ticksUsingItem, 0.0f, finishRaisingTick),
+                progress(ticksUsingItem, finishRaisingTick, finishTiredTick),
+                progress(ticksUsingItem, finishTiredTick, finishDisengagedTick));
+    }
+
+    private float progress(float value, float start, float end) {
+        if (end <= start) {
+            return value >= end ? 1.0f : 0.0f;
+        }
+        return clamp01((value - start) / (end - start));
+    }
+
+    private float smoothStep(float value) {
+        float clamped = clamp01(value);
+        return clamped * clamped * (3.0f - 2.0f * clamped);
+    }
+
+    private float clamp01(float value) {
+        return Math.max(0.0f, Math.min(1.0f, value));
     }
 
     private boolean shouldApplySpearUseItemTransform(LivingEntity livingEntity, ItemStack itemStack, HumanoidArm humanoidArm) {
-        if (itemStack.isEmpty() || itemStack.getUseAnimation() != ItemUseAnimation.SPEAR) {
+        if (itemStack.isEmpty()
+                || itemStack.getUseAnimation() != ItemUseAnimation.SPEAR
+                || InnerClassify.getWeaponKind(itemStack) != WeaponKind.SPEAR
+                || itemStack.get(DataComponents.KINETIC_WEAPON) == null) {
             return false;
         }
-        if (!livingEntity.isUsingItem() || livingEntity.getUseItemRemainingTicks() <= 0) {
+        InteractionHand renderedHand = getRenderedHand(livingEntity, humanoidArm);
+        if (!InputStateKey.isUsingItem(livingEntity, renderedHand)) {
             return false;
         }
-        return livingEntity.getUsedItemHand() == getRenderedHand(livingEntity, humanoidArm);
+        return InputStateKey.getUsedItemHand(livingEntity) == renderedHand;
     }
 
     private InteractionHand getRenderedHand(LivingEntity livingEntity, HumanoidArm humanoidArm) {
@@ -227,5 +275,8 @@ public class CustomPlayerItemInHandLayer extends GeoLayerRenderer<CustomPlayerEn
             return RenderUtils.prepMatrixForLocator(poseStack, model.leftHandBones());
         }
         return RenderUtils.prepMatrixForLocator(poseStack, model.rightHandBones());
+    }
+
+    private record SpearUseParams(float engagedProgress, float tiredProgress, float disengagedProgress) {
     }
 }

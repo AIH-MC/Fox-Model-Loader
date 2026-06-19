@@ -19,6 +19,8 @@ import java.util.Collection;
 
 public class PlayerStateSynchronizer {
 
+    private static final double HORIZONTAL_MOVEMENT_EPSILON_SQR = 1.0E-8d;
+
     private TickCounter tickCounter;
 
     private boolean dirty;
@@ -77,6 +79,9 @@ public class PlayerStateSynchronizer {
     public void updateAndSync(ServerPlayer serverPlayer, boolean sendNow, boolean isDirty) {
         setDirty(isDirty);
         S2CSyncPlayerStatePacket message = getOrCreateSyncMessage(serverPlayer, sendNow);
+        boolean horizontalMoving = hasHorizontalMovement(serverPlayer);
+        float syncedStrafeInput = horizontalMoving ? serverPlayer.xxa : 0.0f;
+        float syncedForwardInput = horizontalMoving ? serverPlayer.zza : 0.0f;
         if (this.experienceLevel != serverPlayer.experienceLevel) {
             this.experienceLevel = serverPlayer.experienceLevel;
             if (sendNow) {
@@ -107,8 +112,8 @@ public class PlayerStateSynchronizer {
                 message.setFoodLevel(this.foodLevel);
             }
         }
-        if (this.strafeInput != serverPlayer.xxa) {
-            this.strafeInput = serverPlayer.xxa;
+        if (this.strafeInput != syncedStrafeInput) {
+            this.strafeInput = syncedStrafeInput;
             if (sendNow) {
                 message.setStrafeInput(this.strafeInput);
             }
@@ -119,8 +124,8 @@ public class PlayerStateSynchronizer {
                 message.setVerticalInput(this.verticalInput);
             }
         }
-        if (this.forwardInput != serverPlayer.zza) {
-            this.forwardInput = serverPlayer.zza;
+        if (this.forwardInput != syncedForwardInput) {
+            this.forwardInput = syncedForwardInput;
             if (sendNow) {
                 message.setForwardInput(this.forwardInput);
             }
@@ -190,13 +195,20 @@ public class PlayerStateSynchronizer {
         }
         message.setHealth((int) serverPlayer.getHealth());
         message.setMaxHealth((int) serverPlayer.getMaxHealth());
-        message.setStrafeInput(serverPlayer.xxa);
+        boolean horizontalMoving = hasHorizontalMovement(serverPlayer);
+        message.setStrafeInput(horizontalMoving ? serverPlayer.xxa : 0.0f);
         message.setVerticalInput(serverPlayer.yya);
-        message.setForwardInput(serverPlayer.zza);
+        message.setForwardInput(horizontalMoving ? serverPlayer.zza : 0.0f);
         if (ShieldBlockCooldownEvent.isOnCooldown(serverPlayer)) {
             message.setShieldBlockCooldown(true);
         }
         message.setModelSwitch(this.syncedModelId);
         return message;
+    }
+
+    private static boolean hasHorizontalMovement(ServerPlayer serverPlayer) {
+        double dx = serverPlayer.getX() - serverPlayer.xo;
+        double dz = serverPlayer.getZ() - serverPlayer.zo;
+        return dx * dx + dz * dz > HORIZONTAL_MOVEMENT_EPSILON_SQR;
     }
 }

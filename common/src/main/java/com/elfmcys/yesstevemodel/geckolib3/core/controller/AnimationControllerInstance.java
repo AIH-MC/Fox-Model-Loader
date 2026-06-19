@@ -63,6 +63,9 @@ public class  AnimationControllerInstance {
 
     private boolean isAnimationFinished;
 
+    @Nullable
+    private Float animationTickOverride;
+
     public AnimationControllerInstance(AnimatableEntity<?> animatable, float transitionLengthTicks) {
         this(animatable, transitionLengthTicks, false);
     }
@@ -109,7 +112,13 @@ public class  AnimationControllerInstance {
         this.pendingAnimation = new Pair<>(loopType != null ? loopType : animation.loop, animation);
     }
 
+    public void setAnimationTickOverride(float tick) {
+        this.animationTickOverride = Math.max(tick, 0.0f);
+    }
+
     public void process(float tick, ExpressionEvaluator<AnimationContext<?>> evaluator, boolean z) {
+        Float sampleTickOverride = this.animationTickOverride;
+        this.animationTickOverride = null;
         evaluator.entity().setAnimationControllerContext(this.context);
         float adjustedTick = adjustTick(tick);
         if (this.animationState == AnimationState.ENDING_TRANSITION && adjustedTick >= defaultTransitionTick) {
@@ -147,24 +156,28 @@ public class  AnimationControllerInstance {
             }
         }
         if (this.animationState == AnimationState.RUNNING) {
-            if (adjustedTick > this.currentAnimation.animationLength) {
+            boolean useSampleTickOverride = sampleTickOverride != null;
+            float runningTick = useSampleTickOverride ? Math.max(sampleTickOverride, 0.0f) : adjustedTick;
+            if (runningTick > this.currentAnimation.animationLength) {
                 this.isAnimationFinished = true;
                 if (this.currentAnimationLoop == ILoopType.EDefaultLoopTypes.LOOP) {
                     this.context.executeRenderLayers(evaluator);
                     if (this.currentAnimation.animationLength > 0.0f) {
-                        adjustedTick %= this.currentAnimation.animationLength;
+                        runningTick %= this.currentAnimation.animationLength;
                     } else {
-                        adjustedTick = 0.0f;
+                        runningTick = 0.0f;
                     }
                     executeRemainingEvents(evaluator, z);
-                    this.tickOffset = tick - adjustedTick;
+                    if (!useSampleTickOverride) {
+                        this.tickOffset = tick - runningTick;
+                    }
                 } else if (this.currentAnimationLoop == ILoopType.EDefaultLoopTypes.HOLD_ON_LAST_FRAME) {
-                    adjustedTick = this.currentAnimation.animationLength;
+                    runningTick = this.currentAnimation.animationLength;
                 }
             }
-            this.context.setAnimTime(adjustedTick / 20.0f);
-            executeTimelineEvents(evaluator, adjustedTick, z);
-            processRunningAnimation(evaluator, adjustedTick);
+            this.context.setAnimTime(runningTick / 20.0f);
+            executeTimelineEvents(evaluator, runningTick, z);
+            processRunningAnimation(evaluator, runningTick);
             return;
         }
         if (this.animationState == AnimationState.ENDING_TRANSITION) {
@@ -379,7 +392,7 @@ public class  AnimationControllerInstance {
     }
 
     public float getInterpolated() {
-        return this.transitionInterpolator.getProgress() * 20.0f;
+        return this.transitionInterpolator.getProgress() / 20.0f;
     }
 
     public float adjustTick(float tick) {

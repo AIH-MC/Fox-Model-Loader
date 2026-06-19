@@ -34,9 +34,13 @@ public class GeneralConfig {
 
     public static ModConfigSpec.BooleanValue MODEL_MEMORY_PROFILER;
 
+    public static ModConfigSpec.BooleanValue MODEL_IMPORT_PERFORMANCE_LOG;
+
     public static ModConfigSpec.BooleanValue ANIMATION_FRAME_PROFILER;
 
     public static ModConfigSpec.BooleanValue ANIMATION_DEBUG_LOG;
+
+    public static ModConfigSpec.BooleanValue INPUT_STATE_DEBUG_LOG;
 
     public static ModConfigSpec.BooleanValue EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR;
 
@@ -148,10 +152,14 @@ public class GeneralConfig {
         builder.push("ExperimentalTesting");
         builder.comment("Log model loading memory checkpoints. Intended for diagnostics only.");
         MODEL_MEMORY_PROFILER = builder.define("ModelMemoryProfiler", false);
+        builder.comment("Print [YSM][Perf] timing logs for model import, upload, and reload checkpoints. Intended for diagnostics only.");
+        MODEL_IMPORT_PERFORMANCE_LOG = builder.define("ModelImportPerformanceLog", false);
         builder.comment("Collect animation timing/evaluation diagnostics. Intended for diagnostics only.");
         ANIMATION_FRAME_PROFILER = builder.define("AnimationFrameProfiler", false);
         builder.comment("Print one [YSM-ANIM] line for each animation evaluation when AnimationFrameProfiler is enabled.");
         ANIMATION_DEBUG_LOG = builder.define("AnimationDebugLog", false);
+        builder.comment("Print [YSM-INPUT] diagnostics for attack/use mouse clicks, key state, vanilla swing/use state, and local animation pulses.");
+        INPUT_STATE_DEBUG_LOG = builder.define("InputStateDebugLog", false);
         builder.comment("Allow fallback elytra rendering for models without ElytraLocator. Experimental and may not align perfectly.");
         EXPERIMENTAL_FALLBACK_ELYTRA_WITHOUT_LOCATOR = builder.define("ExperimentalFallbackElytraWithoutLocator", false);
         builder.comment("Re-enable elytra rendering for default and misc built-in models, plus models whose ElytraLocator is nested under an Elytra display bone.");

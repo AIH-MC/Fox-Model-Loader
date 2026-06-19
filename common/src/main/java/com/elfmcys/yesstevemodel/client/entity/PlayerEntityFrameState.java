@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.objects.Object2ByteOpenHashMap;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 
 public class PlayerEntityFrameState extends LivingEntityFrameState<Player> {
@@ -163,7 +164,7 @@ public class PlayerEntityFrameState extends LivingEntityFrameState<Player> {
     private static void updateHeadYaw(Player player, int currentTick, int previousTick) {
         float yRot = player.getYRot();
         if (previousTick > 0) {
-            headYawDelta = ((yRot - lastYRot) * 20.0f) / (currentTick - previousTick);
+            headYawDelta = (Mth.wrapDegrees(yRot - lastYRot) * 20.0f) / Math.max(1, currentTick - previousTick);
         }
         lastYRot = yRot;
     }

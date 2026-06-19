@@ -17,7 +17,6 @@ import com.elfmcys.yesstevemodel.network.message.S2CSyncVehicleModelPacket;
 import com.elfmcys.yesstevemodel.network.message.S2CVersionCheckPacket;
 import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import dev.architectury.utils.GameInstance;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import rip.ysm.api.capability.CapabilityLifecycle;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
@@ -191,7 +190,14 @@ public final class CapabilityEvent {
 
     private static void syncTrackedPlayerModelState(ServerPlayer source, ModelInfoCapability cap) {
         String stateKey = buildModelStateKey(cap);
-        for (ServerPlayer receiver : PlayerLookup.tracking(source)) {
+        MinecraftServer server = GameInstance.getServer();
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+            if (receiver == source) {
+                continue;
+            }
             sendModelStateIfNeeded(source, cap, receiver, stateKey);
         }
         sendModelStateIfNeeded(source, cap, source, stateKey);
@@ -214,7 +220,14 @@ public final class CapabilityEvent {
 
     private static void rememberTrackedPlayerModelState(ServerPlayer source, ModelInfoCapability cap) {
         String stateKey = buildModelStateKey(cap);
-        for (ServerPlayer receiver : PlayerLookup.tracking(source)) {
+        MinecraftServer server = GameInstance.getServer();
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+            if (receiver == source) {
+                continue;
+            }
             rememberModelState(source, receiver, stateKey);
         }
         rememberModelState(source, source, stateKey);

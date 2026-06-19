@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,7 +76,7 @@ public class ResourceStationScreen extends Screen {
     private boolean queuedListRefresh;
     private int listRequestId;
     private volatile int configSaveRequestId;
-    private volatile ListResult pendingListResult;
+    private final ConcurrentLinkedQueue<ListResult> pendingListResults = new ConcurrentLinkedQueue<>();
     private SortMode sortMode = SortMode.NAME;
     private Component status = Component.empty();
     private ChatFormatting statusColor = ChatFormatting.GRAY;
@@ -208,10 +209,15 @@ public class ResourceStationScreen extends Screen {
             ModelRepoEntry entry = visible.get(index);
             int y = entryY(i);
             int buttonX = entryButtonX();
-            int retryW = retryButtonWidth();
             int downloadW = downloadButtonWidth();
-            addRenderableWidget(new FlatColorButton(buttonX, y + 5, downloadW, 18, Component.translatable("gui.yes_steve_model.resource_station.download"), b -> enqueue(entry)));
-            addRenderableWidget(new FlatColorButton(buttonX + downloadW + 4, y + 5, retryW, 18, Component.translatable("gui.yes_steve_model.resource_station.retry"), b -> enqueue(entry)));
+            boolean queued = isQueued(entry);
+            FlatColorButton downloadButton = new FlatColorButton(buttonX, y + 5, downloadW, 18,
+                    queued
+                            ? Component.translatable("gui.yes_steve_model.resource_station.queued_short")
+                            : Component.translatable("gui.yes_steve_model.resource_station.download"),
+                    b -> enqueue(entry));
+            downloadButton.active = !queued;
+            addRenderableWidget(downloadButton);
             ensurePreview(entry);
         }
     }
@@ -220,7 +226,7 @@ public class ResourceStationScreen extends Screen {
     public void removed() {
         this.active = false;
         this.listRequestId++;
-        this.pendingListResult = null;
+        this.pendingListResults.clear();
     }
 
     @Override
@@ -248,6 +254,8 @@ public class ResourceStationScreen extends Screen {
         this.listLoading = true;
         this.queuedListRefresh = false;
         this.entries.clear();
+        this.previewTextures.clear();
+        this.loadingPreviews.clear();
         this.page = 0;
         this.status = Component.translatable("gui.yes_steve_model.resource_station.loading");
         this.statusColor = ChatFormatting.YELLOW;
@@ -260,8 +268,8 @@ public class ResourceStationScreen extends Screen {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }, RESOURCE_EXECUTOR).orTimeout(taskTimeoutMs(), TimeUnit.MILLISECONDS).whenComplete((result, error) -> {
-            this.pendingListResult = new ListResult(requestId, requestUrl, result, error);
+        }, RESOURCE_EXECUTOR).whenComplete((result, error) -> {
+            this.pendingListResults.add(new ListResult(requestId, requestUrl, result, error));
             if (ResourceStationConfig.monitorLogEnabled()) {
                 YesSteveModel.LOGGER.info("[YSM-RESOURCE] UI list request pending id={} source={} result={} error={}",
                         requestId, requestUrl, result == null ? -1 : result.size(), error == null ? "none" : rootMessage(error));
@@ -270,13 +278,17 @@ public class ResourceStationScreen extends Screen {
     }
 
     private void applyPendingListResult() {
-        ListResult pending = this.pendingListResult;
-        if (pending == null) {
-            return;
+        ListResult pending;
+        while ((pending = this.pendingListResults.poll()) != null) {
+            if (applyListResult(pending)) {
+                return;
+            }
         }
-        this.pendingListResult = null;
+    }
+
+    private boolean applyListResult(ListResult pending) {
         if (!this.active || pending.requestId != this.listRequestId) {
-            return;
+            return false;
         }
         this.listLoading = false;
         if (this.queuedListRefresh || !Objects.equals(this.config.selectedUrl(), pending.sourceUrl)) {
@@ -285,7 +297,7 @@ public class ResourceStationScreen extends Screen {
                         pending.requestId, pending.sourceUrl, this.config.selectedUrl(), this.queuedListRefresh);
             }
             startListRefresh();
-            return;
+            return true;
         }
         if (pending.error != null) {
             this.status = Component.translatable("gui.yes_steve_model.resource_station.error", rootMessage(pending.error));
@@ -295,6 +307,8 @@ public class ResourceStationScreen extends Screen {
             }
         } else {
             this.entries.clear();
+            this.previewTextures.clear();
+            this.loadingPreviews.clear();
             this.entries.addAll(pending.entries);
             this.page = 0;
             this.status = Component.translatable("gui.yes_steve_model.resource_station.loaded", pending.entries.size());
@@ -304,6 +318,7 @@ public class ResourceStationScreen extends Screen {
             }
         }
         init();
+        return true;
     }
 
     private void enqueue(ModelRepoEntry entry) {
@@ -377,7 +392,7 @@ public class ResourceStationScreen extends Screen {
         this.previewTextures.clear();
         this.loadingPreviews.clear();
         this.page = 0;
-        this.pendingListResult = null;
+        this.pendingListResults.clear();
         init();
     }
 
@@ -633,12 +648,8 @@ public class ResourceStationScreen extends Screen {
         return buttonWidth(Component.translatable("gui.yes_steve_model.resource_station.download"), this.guiWidth >= 420 ? 44 : 42, 74);
     }
 
-    private int retryButtonWidth() {
-        return buttonWidth(Component.translatable("gui.yes_steve_model.resource_station.retry"), this.guiWidth >= 420 ? 44 : 32, 62);
-    }
-
     private int entryButtonAreaWidth() {
-        return Math.max(ENTRY_BUTTON_AREA_WIDTH, downloadButtonWidth() + retryButtonWidth() + 4);
+        return Math.max(ENTRY_BUTTON_AREA_WIDTH, downloadButtonWidth());
     }
 
     @Override
@@ -684,10 +695,6 @@ public class ResourceStationScreen extends Screen {
         return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
     }
 
-    private long taskTimeoutMs() {
-        return Math.max(15_000L, this.config.timeoutMs() * 4L);
-    }
-
     private static int progressTotal(int contentLength, long entrySize) {
         if (contentLength > 0) {
             return contentLength;
@@ -712,14 +719,14 @@ public class ResourceStationScreen extends Screen {
         SIZE("size"),
         SOURCE("source");
 
-        private final String label;
+        private final String key;
 
-        SortMode(String label) {
-            this.label = label;
+        SortMode(String key) {
+            this.key = key;
         }
 
-        private String label() {
-            return this.label;
+        private Component label() {
+            return Component.translatable("gui.yes_steve_model.resource_station.sort." + this.key);
         }
     }
 

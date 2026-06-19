@@ -21,6 +21,7 @@ import com.elfmcys.yesstevemodel.resource.YSMFolderDeserializer;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.elfmcys.yesstevemodel.util.DigestUtil;
 import com.elfmcys.yesstevemodel.util.ModelIdUtil;
+import com.elfmcys.yesstevemodel.util.PerformanceProfiler;
 import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
 import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import com.elfmcys.yesstevemodel.util.YSMNativeHelper;
@@ -76,7 +77,6 @@ public final class ServerModelManager {
     private static final int UPLOAD_CHUNK_SIZE = 32_000;
     private static final String EXT_YSM = ".ysm";
     private static final String EXT_ZIP = ".zip";
-    private static final String EXT_7Z = ".7z";
     /**
      * 配置相关文件夹
      */
@@ -593,11 +593,6 @@ public final class ServerModelManager {
                 public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) {
                     ImportKind importKind = importKindFromFileName(file.getFileName().toString());
                     if (importKind == ImportKind.UNKNOWN) return FileVisitResult.CONTINUE;
-                    if (importKind == ImportKind.SEVEN_ZIP) {
-                        YesSteveModel.LOGGER.warn("[YSM] Skipping unsupported 7z model archive: {}", file);
-                        return FileVisitResult.CONTINUE;
-                    }
-
                     try {
                         String modelId = stripImportExtension(baseDir.relativize(file).toString().replace('\\', '/'));
                         byte[] raw = readModelFileBytes(file);
@@ -728,14 +723,13 @@ public final class ServerModelManager {
         return switch (importKind) {
             case YSM -> parseBinaryModel(raw, source);
             case ZIP -> parseArchiveModel(raw, source);
-            case SEVEN_ZIP -> throw new UnsupportedOperationException("7z import is not supported yet");
             case UNKNOWN -> throw new IllegalArgumentException("Unsupported model import type for file: " + source);
         };
     }
 
     private static String stripImportExtension(String modelId) {
         String lower = modelId.toLowerCase(Locale.ROOT);
-        for (String extension : new String[]{EXT_YSM, EXT_ZIP, EXT_7Z}) {
+        for (String extension : new String[]{EXT_YSM, EXT_ZIP}) {
             if (lower.endsWith(extension)) {
                 return modelId.substring(0, modelId.length() - extension.length());
             }
@@ -754,9 +748,6 @@ public final class ServerModelManager {
         if (lower.endsWith(EXT_ZIP)) {
             return ImportKind.ZIP;
         }
-        if (lower.endsWith(EXT_7Z)) {
-            return ImportKind.SEVEN_ZIP;
-        }
         return ImportKind.UNKNOWN;
     }
 
@@ -764,7 +755,6 @@ public final class ServerModelManager {
         return switch (kind) {
             case YSM -> EXT_YSM;
             case ZIP -> EXT_ZIP;
-            case SEVEN_ZIP -> EXT_7Z;
             case UNKNOWN -> "";
         };
     }
@@ -1146,9 +1136,6 @@ public final class ServerModelManager {
         if (modelId == null || importKind == ImportKind.UNKNOWN || sha256 == null || !sha256.matches("[0-9a-fA-F]{64}")) {
             return UploadStartResult.reject((byte) 5, "Invalid model id or hash");
         }
-        if (importKind == ImportKind.SEVEN_ZIP) {
-            return UploadStartResult.reject((byte) 7, "7z import is not supported yet");
-        }
         int maxBytes = getModelUploadMaxBytes();
         if (totalBytes <= 0 || totalBytes > maxBytes) {
             return UploadStartResult.reject((byte) 2, "File exceeds server limit");
@@ -1182,6 +1169,7 @@ public final class ServerModelManager {
     }
 
     public static UploadFinishResult finishModelUpload(ServerPlayer sender, long uploadId) {
+        long finishPerfStart = PerformanceProfiler.start();
         ModelUploadState state = uploadStates.remove(uploadId);
         if (state == null || sender == null || !state.owner.equals(sender.getUUID())) {
             return UploadFinishResult.reject(uploadId, (byte) 4, "Session expired");
@@ -1252,11 +1240,14 @@ public final class ServerModelManager {
         }
 
         YesSteveModel.LOGGER.info("[YSM] Imported model '{}' from {} as {}", state.modelId, sender.getScoreboardName(), state.importKind);
+        PerformanceProfiler.logElapsed("server_upload_finish", state.modelId, finishPerfStart,
+                "bytes=" + state.data.length + " type=" + state.importKind);
         long[] hashes = YsmCrypt.calculateModelHashes(rawModel.properties.sha256, serverKey);
         return new UploadFinishResult(uploadId, (byte) 0, state.modelId, hashes[0], hashes[1], "");
     }
 
     private static ModelLoadResult reloadModelsAfterImport() {
+        long perfStart = PerformanceProfiler.start();
         Map<String, ServerModelData> loadedModels = new LinkedHashMap<>();
         Set<String> authIds = new HashSet<>();
         Set<String> validCacheFiles = new HashSet<>();
@@ -1274,6 +1265,8 @@ public final class ServerModelManager {
             ModelLoadResult result = new ModelLoadResult(true, null, loadedModels, authIds.toArray(new String[0]));
             onModelLoadComplete(result, null);
             syncLoadedModelsToPlayers();
+            PerformanceProfiler.logElapsed("server_reload_after_import", null, perfStart,
+                    "models=" + loadedModels.size() + " auth=" + authIds.size());
             return result;
         } catch (Exception e) {
             YesSteveModel.LOGGER.error("[YSM] Failed to reload models after import", e);
@@ -1319,7 +1312,7 @@ public final class ServerModelManager {
         boolean stripped;
         do {
             stripped = false;
-            for (String extension : new String[]{EXT_YSM, EXT_ZIP, EXT_7Z}) {
+            for (String extension : new String[]{EXT_YSM, EXT_ZIP}) {
                 if (normalized.endsWith(extension)) {
                     normalized = normalized.substring(0, normalized.length() - extension.length());
                     stripped = true;
@@ -1637,7 +1630,6 @@ public final class ServerModelManager {
     private enum ImportKind {
         YSM,
         ZIP,
-        SEVEN_ZIP,
         UNKNOWN
     }
 }

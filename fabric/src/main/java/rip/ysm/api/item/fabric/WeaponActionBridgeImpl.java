@@ -1,10 +1,13 @@
 package rip.ysm.api.item.fabric;
 
 import com.elfmcys.yesstevemodel.client.animation.condition.InnerClassify;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
+import net.minecraft.world.item.component.KineticWeapon;
 import net.minecraft.world.phys.Vec3;
 import rip.ysm.api.item.LanceActionState;
 import rip.ysm.api.item.MaceActionState;
@@ -31,7 +34,7 @@ public final class WeaponActionBridgeImpl {
         float verticalSpeed = (float) movement.y;
         return switch (kind) {
             case TRIDENT -> new WeaponActionState(kind, buildTridentState(entity, stack, partialTick), LanceActionState.EMPTY, MaceActionState.EMPTY, speed, verticalSpeed);
-            case LANCE -> new WeaponActionState(kind, TridentActionState.EMPTY, buildLanceState(entity, stack, partialTick, speed), MaceActionState.EMPTY, speed, verticalSpeed);
+            case LANCE, SPEAR -> new WeaponActionState(kind, TridentActionState.EMPTY, buildLanceState(entity, stack, partialTick, speed), MaceActionState.EMPTY, speed, verticalSpeed);
             case MACE -> new WeaponActionState(kind, TridentActionState.EMPTY, LanceActionState.EMPTY, buildMaceState(entity, partialTick, verticalSpeed), speed, verticalSpeed);
             case NONE -> WeaponActionState.EMPTY;
         };
@@ -95,30 +98,39 @@ public final class WeaponActionBridgeImpl {
     }
 
     private static boolean isUsingMainHand(LivingEntity entity) {
-        return entity.isUsingItem() && entity.getUseItemRemainingTicks() > 0 && entity.getUsedItemHand() == InteractionHand.MAIN_HAND;
+        return InputStateKey.isUsingItem(entity, InteractionHand.MAIN_HAND);
     }
 
     private static boolean isAttackingMainHand(LivingEntity entity) {
-        return entity.swinging && entity.swingingArm == InteractionHand.MAIN_HAND;
+        return InputStateKey.isSwinging(entity, InteractionHand.MAIN_HAND);
     }
 
     private static float getUseTicks(LivingEntity entity, boolean using, float partialTick) {
-        return using ? entity.getTicksUsingItem(partialTick) : 0.0f;
+        return using ? InputStateKey.getTicksUsingItem(entity, partialTick) : 0.0f;
     }
 
     private static float getAttackTicks(LivingEntity entity, boolean attacking, float partialTick) {
-        return attacking ? Math.max(0.0f, entity.swingTime + partialTick) : 0.0f;
+        return attacking ? InputStateKey.getSwingTicks(entity, partialTick) : 0.0f;
     }
 
     private static float getChargeProgress(LivingEntity entity, ItemStack stack, boolean using, float partialTick) {
         if (!using) {
             return 0.0f;
         }
+        float useTicks = getUseTicks(entity, true, partialTick);
+        KineticWeapon kineticWeapon = stack.get(DataComponents.KINETIC_WEAPON);
+        if (kineticWeapon != null) {
+            int duration = kineticWeapon.computeDamageUseDuration();
+            if (duration <= 0) {
+                return 0.0f;
+            }
+            return Math.min(1.0f, useTicks / duration);
+        }
         int duration = stack.getUseDuration(entity);
         if (duration <= 0) {
             return 0.0f;
         }
-        return Math.min(1.0f, getUseTicks(entity, true, partialTick) / duration);
+        return Math.min(1.0f, useTicks / duration);
     }
 
     private static float horizontalSpeed(Vec3 movement) {

@@ -4,5 +4,6 @@ public enum WeaponKind {
     NONE,
     TRIDENT,
     LANCE,
+    SPEAR,
     MACE
 }

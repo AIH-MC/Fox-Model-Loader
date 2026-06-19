@@ -91,8 +91,11 @@ public final class GpuRenderPath {
         ByteBuffer boneBuf = mesh.perFrameBoneBuffer;
         boneBuf.clear();
 
-        if (!computeBoneMatrices(model, rootPose, rootNormal, boneParams, stateBuffer, packedLight, boneBuf)) {
-            return false;
+        if (!computeBoneMatricesNative(model, mesh, rootPose, rootNormal, boneParams, stateBuffer, packedLight, boneBuf)) {
+            boneBuf.clear();
+            if (!computeBoneMatrices(model, rootPose, rootNormal, boneParams, stateBuffer, packedLight, boneBuf)) {
+                return false;
+            }
         }
         boneBuf.position(0);
         boneBuf.limit(mesh.boneCount * 144);
@@ -192,6 +195,33 @@ public final class GpuRenderPath {
     private static void refreshLights() {
         currentLights[0] = light0Scratch;
         currentLights[1] = light1Scratch;
+    }
+
+    private static boolean computeBoneMatricesNative(
+            GeoModel model,
+            GpuMesh mesh,
+            Matrix4f rootPose,
+            Matrix3f rootNormal,
+            float[] boneParams,
+            float[] stateBuffer,
+            int packedLight,
+            ByteBuffer out
+    ) {
+        int boneCount = model.bakedBones.size();
+        if (mesh.pointer == 0 || boneParams == null || boneParams.length < boneCount * 12) {
+            return false;
+        }
+
+        rootPose.get(rootPoseScratch);
+        rootNormal.get(rootNormalScratch);
+        updatePivotAbsStateBuffer(model, boneParams, stateBuffer);
+
+        try {
+            GeoModel.nComputeBoneMatrices(mesh.pointer, rootPoseScratch, rootNormalScratch, boneParams, packedLight, out);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static boolean computeBoneMatrices(

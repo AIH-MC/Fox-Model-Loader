@@ -62,10 +62,10 @@ public class S2CSetModelAndTexturePacket {
             if (!keepLocalOnlyModel) {
                 NetworkOnlineDebugLog.info("applyOnClient: APPLYING modelId={}", other.modelId);
                 cap.initModelWithTexture(other.modelId, other.textureId);
-                cap.setForceDisabled(other.disabled);
             } else {
                 NetworkOnlineDebugLog.info("applyOnClient: SKIPPED (local-only model)");
             }
+            cap.setForceDisabled(other.disabled);
             S2CSyncPlayerStatePacket.handleCapability(entity, other.entityModelSync);
         });
     }

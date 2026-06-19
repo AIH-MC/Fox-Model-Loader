@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.geckolib3.core.molang.builtin;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.geckolib3.core.controller.AnimationControllerContext;
 import com.elfmcys.yesstevemodel.audio.PlaybackFlags;
 import rip.ysm.compat.cosmeticarmorreworked.CosmeticArmorHelper;
@@ -91,10 +92,13 @@ public class QueryBinding extends ContextBinding {
         livingEntityVar("is_eating", ctx -> ctx.entity().getUseItem().getUseAnimation() == ItemUseAnimation.EAT);
         livingEntityVar("is_playing_dead", ctx -> ctx.entity().isDeadOrDying());
         livingEntityVar("is_sleeping", ctx -> ctx.entity().isSleeping());
-        livingEntityVar("is_using_item", ctx -> ctx.entity().isUsingItem());
-        livingEntityVar("item_in_use_duration", ctx -> ctx.entity().getTicksUsingItem() / 20.0d);
+        livingEntityVar("is_using_item", ctx -> InputStateKey.isUsingItem(ctx.entity(), InputStateKey.getUsedItemHand(ctx.entity())));
+        livingEntityVar("item_in_use_duration", ctx -> InputStateKey.getTicksUsingItem(ctx.entity()) / 20.0d);
         livingEntityVar("item_max_use_duration", ctx -> getItemMaxUseDuration(ctx.entity()) / 20.0d);
-        livingEntityVar("item_remaining_use_duration", ctx -> ctx.entity().getUseItemRemainingTicks() / 20.0d);
+        livingEntityVar("item_remaining_use_duration", ctx -> getItemRemainingUseDuration(ctx.entity()) / 20.0d);
+        livingEntityVar("is_swinging", QueryBinding::isSwinging);
+        livingEntityVar("swing_time", ctx -> getSwingTime(ctx) / 20.0d);
+        livingEntityVar("attack_time", QueryBinding::getAttackTime);
         livingEntityVar("equipment_count", ctx -> getEquipmentCount(ctx.entity()));
 
         playerEntityVar("cape_flap_amount", QueryBinding::getCapeFlapAmount);
@@ -110,6 +114,43 @@ public class QueryBinding extends ContextBinding {
 
     private static Optional<PlaybackFlags> getPlaybackFlags(IContext<?> context) {
         return Optional.ofNullable(context.getPlaybackFlags());
+    }
+
+    private static int getItemRemainingUseDuration(LivingEntity entity) {
+        if (entity.isUsingItem()) {
+            return entity.getUseItemRemainingTicks();
+        }
+        return InputStateKey.isUsingItem(entity, InputStateKey.getUsedItemHand(entity)) ? Math.max(1, 6 - InputStateKey.getTicksUsingItem(entity)) : 0;
+    }
+
+    private static boolean isSwinging(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.isLocalAnyHandSwinging()) {
+            return true;
+        }
+        return InputStateKey.isAnyHandSwinging(context.entity());
+    }
+
+    private static float getSwingTime(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0) {
+            return Math.max(1.0f, InputStateKey.getLocalSwingPulseAge() + context.animationEvent().getFrameTime());
+        }
+        return InputStateKey.getSwingTicks(context.entity(), context.animationEvent().getFrameTime());
+    }
+
+    private static float getAttackTime(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0
+                && InputStateKey.getLocalSwingingHand() == net.minecraft.world.InteractionHand.MAIN_HAND) {
+            return Math.min(1.0f, getSwingTime(context) / 6.0f);
+        }
+        return InputStateKey.getAttackProgress(context.entity(), context.animationEvent().getFrameTime());
+    }
+
+    private static boolean isLocalPlayerModel(IContext<? extends LivingEntity> context) {
+        return context.geoInstance() instanceof PlayerCapability cap && cap.isLocalPlayerModel();
+    }
+
+    private static boolean isLocalSwingTarget(IContext<? extends LivingEntity> context) {
+        return isLocalPlayerModel(context) || context.entity() instanceof Player;
     }
 
     private static int getMoonPhase(long dayTime) {
@@ -182,7 +223,7 @@ public class QueryBinding extends ContextBinding {
         if (context.entity() instanceof LocalPlayer) {
             return PlayerEntityFrameState.getHeadYawDelta();
         }
-        return 20.0f * (context.entity().getYRot() - context.entity().yRotO);
+        return 20.0f * Mth.wrapDegrees(context.entity().getYRot() - context.entity().yRotO);
     }
 
     private static float getDistanceFromCamera(IContext<Entity> context) {

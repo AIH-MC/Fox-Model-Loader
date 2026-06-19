@@ -3,11 +3,14 @@ package com.elfmcys.yesstevemodel.client.animation.condition;
 import rip.ysm.compat.touhoulittlemaid.TouhouLittleMaidCompat;
 import rip.ysm.compat.slashblade.SlashBladeCompat;
 import com.elfmcys.yesstevemodel.util.ItemTagsConstants;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.item.Items;
 import rip.ysm.api.item.WeaponKind;
 
@@ -46,6 +49,7 @@ public class InnerClassify {
         }
         return switch (getWeaponKind(itemStack)) {
             case TRIDENT -> "spear";
+            case SPEAR -> "spear";
             case LANCE -> "lance";
             case MACE -> "mace";
             case NONE -> getNonWeaponItemType(itemStack);
@@ -60,6 +64,9 @@ public class InnerClassify {
         if (item == Items.TRIDENT || itemStack.is(ItemTagsConstants.TRIDENTS)) {
             return WeaponKind.TRIDENT;
         }
+        if (isVanillaSpear(itemStack)) {
+            return WeaponKind.SPEAR;
+        }
         if (itemStack.is(ItemTagsConstants.PIKE)) {
             return WeaponKind.LANCE;
         }
@@ -67,6 +74,14 @@ public class InnerClassify {
             return WeaponKind.MACE;
         }
         return WeaponKind.NONE;
+    }
+
+    private static boolean isVanillaSpear(ItemStack itemStack) {
+        if (itemStack.getUseAnimation() != ItemUseAnimation.SPEAR) {
+            return false;
+        }
+        Identifier id = BuiltInRegistries.ITEM.getKey(itemStack.getItem());
+        return id != null && "minecraft".equals(id.getNamespace()) && id.getPath().endsWith("_spear");
     }
 
     private static String getNonWeaponItemType(ItemStack itemStack) {

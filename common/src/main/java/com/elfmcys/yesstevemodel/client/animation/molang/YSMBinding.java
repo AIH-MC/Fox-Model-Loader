@@ -4,6 +4,7 @@ import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import rip.ysm.compat.touhoulittlemaid.TouhouLittleMaidCompat;
 import com.elfmcys.yesstevemodel.util.accessors.ProjectileStateAccessor;
 import com.elfmcys.yesstevemodel.client.animation.molang.functions.ysm.*;
+import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import rip.ysm.compat.cosmeticarmorreworked.CosmeticArmorHelper;
 import rip.ysm.compat.curios.CuriosCompat;
 import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
@@ -52,7 +53,6 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
 import dev.architectury.platform.Platform;
 import rip.ysm.api.attribute.ForgeAttributes;
 import rip.ysm.api.item.LanceActionState;
@@ -119,7 +119,7 @@ public class YSMBinding extends ContextBinding {
         entityVar("eye_in_water", ctx -> ctx.entity().isUnderWater());
         entityVar("frozen_ticks", ctx -> ctx.entity().getTicksFrozen());
         entityVar("air_supply", ctx -> ctx.entity().getAirSupply());
-        entityVar("delta_movement_length", ctx -> ctx.entity().getDeltaMovement().length());
+        entityVar("delta_movement_length", ctx -> MovementQuery.getDeltaMovementLength(ctx.entity(), ctx.geoInstance().getPositionTracker()));
         entityVar("boat_left_paddle", ctx -> getBoatPaddleState(ctx, AbstractBoat.PADDLE_LEFT));
         entityVar("boat_right_paddle", ctx -> getBoatPaddleState(ctx, AbstractBoat.PADDLE_RIGHT));
         entityVar("boat_left_rowing_time", ctx -> getBoatRowingTime(ctx, AbstractBoat.PADDLE_LEFT));
@@ -159,6 +159,7 @@ public class YSMBinding extends ContextBinding {
         livingEntityVar("weapon_type", ctx -> getWeaponType(ctx));
         livingEntityVar("weapon_is_trident", ctx -> getWeaponState(ctx).kind() == WeaponKind.TRIDENT);
         livingEntityVar("weapon_is_lance", ctx -> getWeaponState(ctx).kind() == WeaponKind.LANCE);
+        livingEntityVar("weapon_is_spear", ctx -> getWeaponState(ctx).kind() == WeaponKind.SPEAR);
         livingEntityVar("weapon_is_mace", ctx -> getWeaponState(ctx).kind() == WeaponKind.MACE);
         livingEntityVar("weapon_attacking", ctx -> isWeaponAttacking(getWeaponState(ctx)));
         livingEntityVar("weapon_using", ctx -> isWeaponUsing(getWeaponState(ctx)));
@@ -200,10 +201,10 @@ public class YSMBinding extends ContextBinding {
         livingEntityVar("mace_smash_progress", ctx -> getWeaponState(ctx).mace().smashProgress());
 
         livingEntityVar("is_fishing", YSMBinding::isFishing);
-        livingEntityVar("swinging", ctx -> ctx.entity().swinging);
-        livingEntityVar("swing_time", ctx -> ctx.entity().swingTime);
-        livingEntityVar("swinging_arm", ctx -> ctx.entity().swingingArm == InteractionHand.MAIN_HAND ? 0 : 1);
-        livingEntityVar("attack_time", ctx -> ctx.entity().getAttackAnim(ctx.animationEvent().getFrameTime()));
+        livingEntityVar("swinging", YSMBinding::isSwinging);
+        livingEntityVar("swing_time", YSMBinding::getSwingTime);
+        livingEntityVar("swinging_arm", ctx -> getSwingingHand(ctx) == InteractionHand.MAIN_HAND ? 0 : 1);
+        livingEntityVar("attack_time", YSMBinding::getAttackTime);
         playerEntityVar("texture_name", new TextureName());
         playerEntityVar("first_person_mod_hide", new FirstPersonModHide());
 
@@ -448,12 +449,50 @@ public class YSMBinding extends ContextBinding {
             case TRIDENT -> 1;
             case LANCE -> 2;
             case MACE -> 3;
+            case SPEAR -> 4;
             case NONE -> 0;
         };
     }
 
     private static boolean isWeaponAttacking(WeaponActionState state) {
-        return state.trident().attacking() || state.lance().jabbing() || state.mace().attacking();
+        return state.trident().attacking() || state.lance().jabbing() || state.lance().lunging() || state.mace().attacking();
+    }
+
+    private static boolean isSwinging(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.isLocalAnyHandSwinging()) {
+            return true;
+        }
+        return InputStateKey.isAnyHandSwinging(context.entity());
+    }
+
+    private static float getSwingTime(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0) {
+            return Math.max(1.0f, InputStateKey.getLocalSwingPulseAge() + context.animationEvent().getFrameTime());
+        }
+        return InputStateKey.getSwingTicks(context.entity(), context.animationEvent().getFrameTime());
+    }
+
+    private static InteractionHand getSwingingHand(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0) {
+            return InputStateKey.getLocalSwingingHand();
+        }
+        return InputStateKey.getSwingingHand(context.entity());
+    }
+
+    private static float getAttackTime(IContext<LivingEntity> context) {
+        if (isLocalSwingTarget(context) && InputStateKey.getLocalSwingPulseTicks() > 0
+                && InputStateKey.getLocalSwingingHand() == InteractionHand.MAIN_HAND) {
+            return Math.min(1.0f, getSwingTime(context) / 6.0f);
+        }
+        return InputStateKey.getAttackProgress(context.entity(), context.animationEvent().getFrameTime());
+    }
+
+    private static boolean isLocalPlayerModel(IContext<? extends LivingEntity> context) {
+        return context.geoInstance() instanceof PlayerCapability cap && cap.isLocalPlayerModel();
+    }
+
+    private static boolean isLocalSwingTarget(IContext<? extends LivingEntity> context) {
+        return isLocalPlayerModel(context) || context.entity() instanceof Player;
     }
 
     private static boolean isWeaponUsing(WeaponActionState state) {
