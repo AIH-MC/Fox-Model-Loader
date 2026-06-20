@@ -1,0 +1,41 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "MIT"
+issueTrackerURL="https://github.com/sdf123098/Fox-Model-Loader/issues"
+logoFile="yesstevemodel.png"
+
+[[mixins]]
+config = "yes_steve_model.mixins.json"
+
+[[mixins]]
+config = "yes_steve_model_neoforge.mixins.json"
+
+[[accessTransformers]]
+file = "META-INF/accesstransformer.cfg"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Fox Model Loader"
+#updateJSONURL=""
+displayURL="https://github.com/sdf123098/Fox-Model-Loader"
+logoFile="yesstevemodel.png"
+credits="YSM Team"
+authors="Micaftic"
+description='''
+Fox Model Loader - Custom player model system for Minecraft.
+'''
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${mc_version}"
+ordering = "NONE"
+side = "BOTH"

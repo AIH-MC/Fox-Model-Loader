@@ -1,0 +1,26 @@
+# Build
+build/
+dist/
+out/
+
+# Gradle
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.eclipse/
+.settings/
+.classpath
+.project
+
+# CodeGraph
+.codegraph/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
