@@ -277,9 +277,9 @@ public class ClientModelManager {
 
             String modelId = buf.readString();
             boolean isAuth = buf.readVarInt() == 1;// isAuth
-            int isCustomSkinModel = buf.readVarInt();// is misc/2_steve misc/1_alex
+            int isCustomSkinModel = buf.readVarInt();// is default
 //            System.out.println("Received model hash: " + mHash + ", id: " + modelId + ", unk1: " + isAuth + ", unk2: " + isCustomSkinModel);
-            int version = buf.readVarInt(); // 瀵逛簬鏂囦欢澶规湭鍔犲瘑鐨勬ā鍨嬶紝涓?5535
+            int version = buf.readVarInt(); // 鐎甸€涚艾閺傚洣娆㈡径瑙勬弓閸旂姴鐦戦惃鍕侀崹瀣剁礉娑?5535
 
             ServerModelContext ctx = new ServerModelContext(hash1, hash2, modelId, isAuth, isCustomSkinModel, version);
             serverModels.put(ctx.uuid, ctx);
@@ -297,7 +297,7 @@ public class ClientModelManager {
                     updatedModelIds.add(modelId);
                     isModelReadyList.add(isAuth);
                 } else {
-                    // 鍛戒腑缂撳瓨
+                    // 閸涙垝鑵戠紓鎾崇摠
                     modelPhraseExecutor.submit(() -> {
                         if (clientKey == null) return;
                         try {
@@ -796,7 +796,7 @@ public class ClientModelManager {
             return model;
         }
 
-        // 瑙﹀彂棰勫姞杞?        loadDefaultModel();
+        // 鐟欙箑褰傛０鍕鏉?        loadDefaultModel();
         model = localModelContext;
         if (model != null) {
             touchAssembly(model);
@@ -1449,7 +1449,7 @@ public class ClientModelManager {
 
                 if (!cacheDir.exists() || !cacheDir.isDirectory()) {
                     if (callback != null) {
-                        callback.accept(new ExportResult(false, Component.literal("灏氭湭鐢熸垚浠讳綍缂撳瓨鎴栫紦瀛樻枃浠跺す涓嶅瓨鍦? " + folder), "", "", 0));
+                        callback.accept(new ExportResult(false, Component.literal("鐏忔碍婀悽鐔稿灇娴犺缍嶇紓鎾崇摠閹存牜绱︾€涙ɑ鏋冩禒璺恒仚娑撳秴鐡ㄩ崷? " + folder), "", "", 0));
                     }
                     return;
                 }
@@ -1534,7 +1534,7 @@ public class ClientModelManager {
             } catch (Exception e) {
                 YesSteveModel.LOGGER.error("[YSM] Error during batch export", e);
                 if (callback != null) {
-                    callback.accept(new ExportResult(false, Component.literal("鎵归噺瀵煎嚭杩囩▼鍙戠敓涓ラ噸閿欒: " + e.getMessage()), "", "", 0));
+                    callback.accept(new ExportResult(false, Component.literal("閹靛綊鍣虹€电厧鍤潻鍥┾柤閸欐垹鏁撴稉銉╁櫢闁挎瑨顕? " + e.getMessage()), "", "", 0));
                 }
             }
         });

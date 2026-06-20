@@ -1,7 +1,7 @@
 package com.elfmcys.yesstevemodel.fabric.mixin.client;
 
-import dev.architectury.event.EventResult;
-import dev.architectury.event.events.client.ClientRawInputEvent;
+import rip.ysm.architectury.event.EventResult;
+import rip.ysm.architectury.event.events.client.ClientRawInputEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.input.KeyEvent;

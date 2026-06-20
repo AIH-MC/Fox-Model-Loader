@@ -53,7 +53,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 import rip.ysm.api.attribute.ForgeAttributes;
 import rip.ysm.api.item.LanceActionState;
 import rip.ysm.api.item.MaceActionState;

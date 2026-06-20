@@ -4,7 +4,7 @@ import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.mixin.client.MinecraftAccessor;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
-import dev.architectury.event.events.client.ClientPlayerEvent;
+import rip.ysm.architectury.event.events.client.ClientPlayerEvent;
 import net.minecraft.client.Minecraft;
 import java.util.concurrent.Executor;
 import net.minecraft.client.player.LocalPlayer;

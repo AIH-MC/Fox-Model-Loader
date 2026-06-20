@@ -51,7 +51,7 @@ public class ServerConfig {
         builder.comment("How many upload chunks a client may send per tick");
         MODEL_UPLOAD_CHUNKS_PER_TICK = builder.defineInRange("ModelUploadChunksPerTick", 4, 1, 32);
         builder.comment("Models that are not displayed on the client model selection screen");
-        builder.comment("Example: [\"default\", \"misc_3_default_boy\", \"misc_1_alex\", \"misc_2_steve\"]");
+        builder.comment("Example: [\"default\"]");
         CLIENT_NOT_DISPLAY_MODELS = builder.define("ClientNotDisplayModels", Lists.newArrayList());
         builder.push("server_scheduler");
         builder.comment("Concurrent level for processing models. Value 0 means AUTO.");

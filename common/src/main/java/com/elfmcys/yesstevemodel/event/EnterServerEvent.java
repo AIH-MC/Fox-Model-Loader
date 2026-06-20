@@ -8,7 +8,7 @@ import com.elfmcys.yesstevemodel.network.message.S2CSyncAuthModelsPacket;
 import com.elfmcys.yesstevemodel.network.message.S2CSyncStarModelsPacket;
 import com.elfmcys.yesstevemodel.network.message.S2CVersionCheckPacket;
 import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
-import dev.architectury.event.events.common.PlayerEvent;
+import rip.ysm.architectury.event.events.common.PlayerEvent;
 
 import java.util.Objects;
 import java.util.Optional;

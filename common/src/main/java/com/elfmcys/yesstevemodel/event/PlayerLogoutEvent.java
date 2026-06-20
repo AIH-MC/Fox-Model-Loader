@@ -6,7 +6,7 @@ import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
 import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
-import dev.architectury.event.events.common.PlayerEvent;
+import rip.ysm.architectury.event.events.common.PlayerEvent;
 
 public final class PlayerLogoutEvent {
 

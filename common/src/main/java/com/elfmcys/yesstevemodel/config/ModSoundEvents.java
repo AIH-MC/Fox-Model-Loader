@@ -1,8 +1,8 @@
 package com.elfmcys.yesstevemodel.config;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
-import dev.architectury.registry.registries.DeferredRegister;
-import dev.architectury.registry.registries.RegistrySupplier;
+import rip.ysm.architectury.registry.registries.DeferredRegister;
+import rip.ysm.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;

@@ -1,6 +1,6 @@
 package com.elfmcys.yesstevemodel.mixin.client;
 
-import dev.architectury.event.events.client.ClientPlayerEvent;
+import rip.ysm.architectury.event.events.client.ClientPlayerEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;

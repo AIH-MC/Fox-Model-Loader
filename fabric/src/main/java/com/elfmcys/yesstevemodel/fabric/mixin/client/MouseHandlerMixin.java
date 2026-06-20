@@ -1,6 +1,6 @@
 package com.elfmcys.yesstevemodel.fabric.mixin.client;
 
-import dev.architectury.event.events.client.ClientRawInputEvent;
+import rip.ysm.architectury.event.events.client.ClientRawInputEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;

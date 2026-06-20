@@ -79,6 +79,10 @@ public class CustomPlayerRenderer extends GeoReplacedEntityRenderer<Player, Cust
         if (dDistanceToSqr >= nameRenderDistance * nameRenderDistance || (localPlayer = (minecraft = Minecraft.getInstance()).player) == null) {
             return false;
         }
+        // Hide nametag for the local player (self)
+        if (entity == localPlayer) {
+            return false;
+        }
         boolean isVisible = !entity.isInvisibleTo(localPlayer);
         if (entity != localPlayer) {
             Team team = entity.getTeam();

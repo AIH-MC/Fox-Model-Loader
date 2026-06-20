@@ -32,8 +32,8 @@ import com.google.common.util.concurrent.RateLimiter;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.architectury.platform.Platform;
-import dev.architectury.utils.GameInstance;
+import rip.ysm.architectury.platform.Platform;
+import rip.ysm.architectury.utils.GameInstance;
 import io.netty.buffer.Unpooled;
 import it.unimi.dsi.fastutil.floats.FloatReferencePair;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
@@ -220,7 +220,7 @@ public final class ServerModelManager {
                             "# Path Matching Rules:\n" +
                             "# The mod will use the following path formats for regular expression matching during extraction:\n" +
                             "#\n" +
-                            "# assets/yes_steve_model/builtin/misc/2_steve/ysm.json\n" +
+                            "# assets/yes_steve_model/builtin/default/ysm.json\n" +
                             "\n" +
                             "# 配置示例：\n" +
                             "# 重要提示：下面的示例都以 # 开头，这表示它们目前是注释状态，不会生效\n" +
@@ -230,10 +230,10 @@ public final class ServerModelManager {
                             "# Important Notice: All examples below start with #, meaning they are currently commented out and inactive\n" +
                             "# To enable a rule, delete the # symbol and space at the beginning of that line\n" +
                             "\n" +
-                            "# 示例1：禁用杂项模型文件夹下的所有模型 | Example 1: Disable all models in misc folder\n" +
-                            "# assets/yes_steve_model/builtin/misc/.*\n" +
+                            "# 示例1：禁用所有内置模型 | Example 1: Disable all built-in models\n" +
+                            "# assets/yes_steve_model/builtin/default/.*\n" +
                             "\n" +
-                            "# 示例2：禁用所有内置模型 | Example 2: Disable all built-in models\n" +
+                            "# 示例2：禁用所有模型 | Example 2: Disable all models\n" +
                             "# .*";
             Files.writeString(blacklistFile, content, StandardCharsets.UTF_8);
         }
@@ -801,7 +801,7 @@ public final class ServerModelManager {
             }
             validCacheFiles.add(cacheFileName);
 
-            boolean isCustomSkinModel = "misc/2_steve".equals(modelId) || "misc/1_alex".equals(modelId); // 对没错就是写死的
+            boolean isCustomSkinModel = "default".equals(modelId);
 
             return mapToDataClass(modelId, model, isAuth, isCustomSkinModel);
         } catch (Exception e) {

@@ -1,6 +1,6 @@
 package com.elfmcys.yesstevemodel.config;
 
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public class ExtraPlayerRenderConfig {

@@ -1,7 +1,7 @@
 package com.elfmcys.yesstevemodel;
 
 import com.sun.jna.NativeLibrary;
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringUtil;
 import org.apache.commons.io.FileUtils;

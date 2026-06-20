@@ -1,6 +1,6 @@
 package com.elfmcys.yesstevemodel.fabric.mixin;
 
-import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
+import rip.ysm.architectury.registry.client.keymappings.KeyMappingRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Options;
 import org.spongepowered.asm.mixin.Final;

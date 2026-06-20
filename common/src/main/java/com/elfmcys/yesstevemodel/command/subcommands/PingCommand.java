@@ -11,7 +11,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 
 public class PingCommand {
 

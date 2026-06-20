@@ -1,6 +1,6 @@
 package com.elfmcys.yesstevemodel.util.fabric;
 
-import dev.architectury.utils.GameInstance;
+import rip.ysm.architectury.utils.GameInstance;
 import com.elfmcys.yesstevemodel.fabric.mixin.PlayerListAccessor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
