@@ -100,7 +100,7 @@ public class PredicateBasedController<T extends AnimatableEntity<?>> implements 
         event.getAnimatable().setAnimationState(this.name, this.transitionInterpolator.getAnimationState());
     }
 
-    private boolean shouldForceSwingPredicate() {
+    public boolean shouldForceSwingPredicate() {
         return PLAYER_SWING_CONTROLLER.equals(this.name) && InputStateKey.isLocalAnyHandSwinging();
     }
 

@@ -409,7 +409,7 @@ public final class ResourceDownloadManager {
     }
 
     private static void removeSiblingModelFiles(Path customRoot, String modelId, Path keepTarget) throws IOException {
-        for (String extension : new String[]{".ysm", ".zip", ".7z"}) {
+        for (String extension : new String[]{".ysm", ".zip"}) {
             Path sibling = ServerModelManager.CUSTOM.resolve(modelId + extension).toAbsolutePath().normalize();
             if (sibling.startsWith(customRoot) && !sibling.equals(keepTarget)) {
                 Files.deleteIfExists(sibling);
@@ -422,15 +422,12 @@ public final class ResourceDownloadManager {
         if (lower.endsWith(".zip")) {
             return ".zip";
         }
-        if (lower.endsWith(".7z")) {
-            return ".7z";
-        }
         return ".ysm";
     }
 
     private static String stripKnownImportExtension(String modelId) {
         String lower = modelId == null ? "" : modelId.toLowerCase(Locale.ROOT);
-        for (String extension : new String[]{".ysm", ".zip", ".7z"}) {
+        for (String extension : new String[]{".ysm", ".zip"}) {
             if (lower.endsWith(extension)) {
                 return modelId.substring(0, modelId.length() - extension.length());
             }

@@ -113,6 +113,13 @@ public final class PlayerModelSelectionStore {
 
     @Nullable
     private static String getRejectReason(String modelId, @Nullable String resolvedTexture, AuthModelsCapability authModelsCap) {
+        Pair<String, String> defaultConfig = ServerModelManager.getDefaultModelConfig();
+        if (modelId.equals(defaultConfig.getLeft())) {
+            if (resolvedTexture == null) {
+                return "texture_null";
+            }
+            return null;
+        }
         if (!ServerModelManager.getServerModelInfo().containsKey(modelId)) {
             return "not_in_cache";
         }

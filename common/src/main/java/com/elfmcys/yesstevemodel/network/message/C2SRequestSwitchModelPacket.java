@@ -8,6 +8,7 @@ import com.elfmcys.yesstevemodel.util.PlayerDataSaveBridge;
 import com.elfmcys.yesstevemodel.util.PlayerModelSelectionStore;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+import org.apache.commons.lang3.tuple.Pair;
 import rip.ysm.api.network.PacketContext;
 
 public class C2SRequestSwitchModelPacket {
@@ -45,7 +46,15 @@ public class C2SRequestSwitchModelPacket {
         ModelInfoCapability.get(sender).ifPresent(cap -> {
             AuthModelsCapability.get(sender).ifPresent(cap2 -> {
                 String modelId = message.modelId;
-                if (!ServerModelManager.getServerModelInfo().containsKey(modelId) || (ServerModelManager.getAuthModels().contains(modelId) && !cap2.containsModel(modelId))) {
+                Pair<String, String> defaultConfig = ServerModelManager.getDefaultModelConfig();
+                if (modelId.equals(defaultConfig.getLeft())) {
+                    String textureId = ServerModelManager.resolveTextureOrDefault(modelId, message.textureId);
+                    if (textureId == null) {
+                        textureId = defaultConfig.getRight();
+                    }
+                    cap.setModelAndTexture(modelId, textureId);
+                    PlayerModelSelectionStore.saveCurrentSelection(sender, cap);
+                } else if (!ServerModelManager.getServerModelInfo().containsKey(modelId) || (ServerModelManager.getAuthModels().contains(modelId) && !cap2.containsModel(modelId))) {
                     cap.resetToDefault();
                     PlayerModelSelectionStore.saveCurrentSelection(sender, cap);
                 } else {

@@ -61,11 +61,15 @@ public class CustomPlayerRenderer extends GeoReplacedEntityRenderer<Player, Cust
 
     @Override
     public boolean shouldShowName(Player entity) {
-        Minecraft minecraft;
+        Minecraft minecraft = Minecraft.getInstance();
+        // Always hide name tag for the local player (camera entity)
+        if (entity == minecraft.getCameraEntity()) {
+            return false;
+        }
         LocalPlayer localPlayer;
         double dDistanceToSqr = this.entityRenderDispatcher.distanceToSqr(entity);
         float nameRenderDistance = entity.isDiscrete() ? 32.0f : 64.0f;
-        if (dDistanceToSqr >= nameRenderDistance * nameRenderDistance || (localPlayer = (minecraft = Minecraft.getInstance()).player) == null) {
+        if (dDistanceToSqr >= nameRenderDistance * nameRenderDistance || (localPlayer = minecraft.player) == null) {
             return false;
         }
         boolean isVisible = !entity.isInvisibleTo(localPlayer);

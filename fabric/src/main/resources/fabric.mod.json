@@ -3,10 +3,12 @@
   "id": "yes_steve_model",
   "version": "${version}",
   "name": "Fox Model Loader",
-  "description": "",
-  "authors": ["Tianjin Accessible Care Innovation Development Co., Ltd."],
+  "description": "Fox Model Loader - Custom player model system for Minecraft.",
+  "authors": ["Micaftic"],
   "contact": {
-    "homepage": ""  },
+    "homepage": "https://github.com/sdf123098/Fox-Model-Loader",
+    "issues": "https://github.com/sdf123098/Fox-Model-Loader/issues"
+  },
   "license": "MIT",
   "icon": "yesstevemodel.png",
   "environment": "*",
@@ -16,6 +18,9 @@
     ],
     "client": [
       "com.elfmcys.yesstevemodel.fabric.client.YesSteveModelFabricClient"
+    ],
+    "modmenu": [
+      "com.elfmcys.yesstevemodel.fabric.compat.ModMenuConfigScreenProvider"
     ],
     "cardinal-components-entity": [
       "com.elfmcys.yesstevemodel.fabric.YsmComponents"
@@ -29,10 +34,12 @@
     "fabricloader": ">=0.16.10",
     "minecraft": "~1.21.1",
     "java": ">=21",
-    "fabric-api": "*"
+    "fabric-api": "*",
+    "architectury": ">=13.0.8",
+    "forgeconfigapiport": ">=21.1.0"
   },
   "suggests": {
-    "another-mod": "*"
+    "modmenu": "*"
   },
   "custom": {
     "cardinal-components": [

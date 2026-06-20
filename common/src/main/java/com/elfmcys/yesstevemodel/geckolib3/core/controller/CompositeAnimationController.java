@@ -81,6 +81,14 @@ public class CompositeAnimationController<T extends AnimatableEntity<?>> impleme
                 this.controller.process(event, evaluator, z);
                 return;
             }
+            if (this.controller.shouldForceSwingPredicate()) {
+                if (this.activeController != this.controller) {
+                    this.controller.setInterpolator(this.animationRuntime.getCurrentEntry().getBlendTransition().asInterpolator());
+                    this.activeController = this.controller;
+                }
+                this.controller.process(event, evaluator, z);
+                return;
+            }
             if (this.activeController != this.animationRuntime) {
                 this.controller.evaluateExpressions(evaluator);
                 this.controller.clearAnimation();

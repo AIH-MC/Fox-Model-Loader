@@ -2,6 +2,7 @@ package com.elfmcys.yesstevemodel.capability;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
+import com.elfmcys.yesstevemodel.model.format.ServerModelData;
 import com.elfmcys.yesstevemodel.network.sync.PlayerStateSynchronizer;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.util.StringPool;
 import com.elfmcys.yesstevemodel.network.message.S2CSetModelAndTexturePacket;
@@ -113,20 +114,30 @@ public class ModelInfoCapability {
     }
 
     public Optional<S2CSetModelAndTexturePacket> createSyncMessage(ServerPlayer serverPlayer, boolean fullSync) {
-        boolean found = ServerModelManager.getModelDefinition(this.modelId).isPresent();
+        Optional<ServerModelData> modelDef = ServerModelManager.getModelDefinition(this.modelId);
+        boolean found = modelDef.isPresent();
         NetworkOnlineDebugLog.info("createSyncMessage: {} modelId={} found={} cacheSize={}",
                 serverPlayer.getName().getString(), this.modelId, found, ServerModelManager.getServerModelInfo().size());
-        return ServerModelManager.getModelDefinition(this.modelId).map(it -> {
+        if (modelDef.isPresent()) {
+            ServerModelData it = modelDef.get();
             Object2FloatOpenHashMap<String> object2FloatOpenHashMap = this.molangStorage.computeIfAbsent(it.getLoadedModelData().getHashId(), i -> new Object2FloatOpenHashMap<>(0));
             while (true) {
                 Consumer<Object2FloatOpenHashMap<String>> consumerPoll = this.pendingCallbacks.poll();
                 if (consumerPoll != null) {
                     consumerPoll.accept(object2FloatOpenHashMap);
                 } else {
-                    return new S2CSetModelAndTexturePacket(serverPlayer.getId(), this.modelId, this.selectTexture, this.disabled, this.animSync.buildFullSyncMessage(serverPlayer, fullSync).setMolangVars(it.getLoadedModelData().getHashId(), object2FloatOpenHashMap));
+                    return Optional.of(new S2CSetModelAndTexturePacket(serverPlayer.getId(), this.modelId, this.selectTexture, this.disabled, this.animSync.buildFullSyncMessage(serverPlayer, fullSync).setMolangVars(it.getLoadedModelData().getHashId(), object2FloatOpenHashMap)));
                 }
             }
-        });
+        } else {
+            Pair<String, String> defaultConfig = ServerModelManager.getDefaultModelConfig();
+            if (this.modelId.equals(defaultConfig.getLeft())) {
+                NetworkOnlineDebugLog.info("createSyncMessage: default model fallback for {} modelId={}",
+                        serverPlayer.getName().getString(), this.modelId);
+                return Optional.of(new S2CSetModelAndTexturePacket(serverPlayer.getId(), this.modelId, this.selectTexture, this.disabled, this.animSync.buildFullSyncMessage(serverPlayer, fullSync)));
+            }
+            return Optional.empty();
+        }
     }
 
     public void withMolangVars(Consumer<Object2FloatOpenHashMap<String>> consumer) {

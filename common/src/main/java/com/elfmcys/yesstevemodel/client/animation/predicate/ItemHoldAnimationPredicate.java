@@ -77,7 +77,9 @@ public class ItemHoldAnimationPredicate implements IAnimationPredicate<LivingAni
 
     private static boolean shouldStartSwingAnimation(AnimationEvent<LivingAnimatable<?>> event, LivingEntity entity, boolean hasLocalSwingPulse) {
         if (hasLocalSwingPulse) {
-            return InputStateKey.getLocalSwingPulseAge() <= 1
+            boolean pulseJustStarted = InputStateKey.getLocalSwingPulseAge() <= 2;
+            boolean vanillaJustStarted = entity.swingTime == 0 && entity.swinging;
+            return (pulseJustStarted || vanillaJustStarted)
                     && event.getAnimatable().getPositionTracker().markProcessed(SWING_START_MARKER);
         }
         return entity.swingTime == 0
