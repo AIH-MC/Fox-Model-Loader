@@ -2,7 +2,7 @@ package com.elfmcys.yesstevemodel.client.upload;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.util.PerformanceProfiler;
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 import net.minecraft.network.chat.Component;
 
 import java.io.ByteArrayOutputStream;

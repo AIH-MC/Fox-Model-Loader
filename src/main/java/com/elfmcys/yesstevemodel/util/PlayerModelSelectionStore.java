@@ -7,7 +7,7 @@ import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 import net.minecraft.server.level.ServerPlayer;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;

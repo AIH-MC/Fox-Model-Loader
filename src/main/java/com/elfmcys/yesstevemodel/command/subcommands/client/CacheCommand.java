@@ -5,7 +5,7 @@ import com.elfmcys.yesstevemodel.util.YSMMessageFormatter;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
-import dev.architectury.event.events.client.ClientCommandRegistrationEvent;
+import rip.ysm.architectury.event.events.client.ClientCommandRegistrationEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 

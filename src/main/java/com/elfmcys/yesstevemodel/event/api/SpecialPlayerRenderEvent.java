@@ -1,9 +1,9 @@
 package com.elfmcys.yesstevemodel.event.api;
 
 import com.elfmcys.yesstevemodel.client.entity.CustomPlayerEntity;
-import dev.architectury.event.Event;
-import dev.architectury.event.EventFactory;
-import dev.architectury.event.EventResult;
+import rip.ysm.architectury.event.Event;
+import rip.ysm.architectury.event.EventFactory;
+import rip.ysm.architectury.event.EventResult;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.Nullable;

@@ -146,11 +146,7 @@ public class CustomPlayerElytraLayer extends GeoLayerRenderer<CustomPlayerEntity
     }
 
     private static boolean isDefaultOrMiscModel(String modelId) {
-        return "default".equals(modelId)
-                || "misc/1_alex".equals(modelId)
-                || "misc/2_steve".equals(modelId)
-                || "misc/3_default_boy".equals(modelId)
-                || "misc/4_default_controllers".equals(modelId);
+        return "default".equals(modelId);
     }
 
     private static boolean hasNestedElytraLocator(AnimatedGeoModel animatedGeoModel) {

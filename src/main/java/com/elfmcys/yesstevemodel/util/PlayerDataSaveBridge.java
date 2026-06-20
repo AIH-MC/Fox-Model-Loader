@@ -1,7 +1,7 @@
 package com.elfmcys.yesstevemodel.util;
 
 import com.elfmcys.yesstevemodel.mixin.PlayerListAccessor;
-import dev.architectury.utils.GameInstance;
+import rip.ysm.architectury.utils.GameInstance;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 

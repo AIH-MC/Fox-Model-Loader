@@ -277,9 +277,9 @@ public class ClientModelManager {
 
             String modelId = buf.readString();
             boolean isAuth = buf.readVarInt() == 1;// isAuth
-            int isCustomSkinModel = buf.readVarInt();// is misc/2_steve misc/1_alex
+            int isCustomSkinModel = buf.readVarInt();// is default
 //            System.out.println("Received model hash: " + mHash + ", id: " + modelId + ", unk1: " + isAuth + ", unk2: " + isCustomSkinModel);
-            int version = buf.readVarInt(); // 鐎甸?涚艾閺傚洣娆㈡径瑙勬弓閸旂姴鐦戦惃鍕侀崹瀣剁礉娑?5535
+            int version = buf.readVarInt(); // 閻庣敻?娑氳壘闁哄倸娲ｅ▎銏″緞鐟欏嫭寮撻柛鏃傚Т閻︽垿鎯冮崟顑熶線宕圭€ｅ墎绀夊☉?5535
 
             ServerModelContext ctx = new ServerModelContext(hash1, hash2, modelId, isAuth, isCustomSkinModel, version);
             serverModels.put(ctx.uuid, ctx);
@@ -297,7 +297,7 @@ public class ClientModelManager {
                     updatedModelIds.add(modelId);
                     isModelReadyList.add(isAuth);
                 } else {
-                    // 閸涙垝鑵戠紓鎾崇摠
+                    // 闁告稒鍨濋懙鎴犵磽閹惧磭鎽?
                     modelPhraseExecutor.submit(() -> {
                         if (clientKey == null) return;
                         try {
@@ -1410,7 +1410,7 @@ public class ClientModelManager {
 
                 if (!cacheDir.exists() || !cacheDir.isDirectory()) {
                     if (callback != null) {
-                        callback.accept(new ExportResult(false, Component.literal("鐏忔碍婀悽鐔稿灇娴犺缍嶇紓鎾崇摠閹存牜绱︾?涙ɑ鏋冩禒璺恒仚娑撳秴鐡ㄩ崷? " + folder), "", "", 0));
+                        callback.accept(new ExportResult(false, Component.literal("閻忓繑纰嶅﹢顓㈡偨閻旂鐏囧ù鐘侯唺缂嶅秶绱撻幘宕囨憼闁瑰瓨鐗滅槐锔?娑櫳戦弸鍐╃鐠烘亽浠氬☉鎾崇Т閻°劑宕? " + folder), "", "", 0));
                     }
                     return;
                 }
@@ -1495,7 +1495,7 @@ public class ClientModelManager {
             } catch (Exception e) {
                 YesSteveModel.LOGGER.error("[YSM] Error during batch export", e);
                 if (callback != null) {
-                    callback.accept(new ExportResult(false, Component.literal("閹靛綊鍣虹?电厧鍤潻鍥┾柤閸欐垹鏁撴稉銉╁櫢闁挎瑨顕? " + e.getMessage()), "", "", 0));
+                    callback.accept(new ExportResult(false, Component.literal("闁归潧缍婇崳铏?鐢靛帶閸ゎ厽娼婚崶鈹炬煠闁告瑦鍨归弫鎾寸▔閵夆晛娅㈤梺鎸庣懆椤? " + e.getMessage()), "", "", 0));
                 }
             }
         });

@@ -2,7 +2,7 @@ package com.elfmcys.yesstevemodel.client.gui.resource;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.config.GeneralConfig;
-import dev.architectury.platform.Platform;
+import rip.ysm.architectury.platform.Platform;
 
 import java.io.IOException;
 import java.io.InputStream;

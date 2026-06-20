@@ -13,7 +13,7 @@ import com.elfmcys.yesstevemodel.client.input.ExtraPlayerRenderKey;
 import com.elfmcys.yesstevemodel.client.input.InputStateKey;
 import com.elfmcys.yesstevemodel.client.input.PlayerModelToggleKey;
 import com.elfmcys.yesstevemodel.client.renderer.RendererManager;
-import dev.architectury.event.events.common.LifecycleEvent;
+import rip.ysm.architectury.event.events.common.LifecycleEvent;
 import rip.ysm.api.PlatformAPI;
 
 public final class YsmEventBootstrap {
