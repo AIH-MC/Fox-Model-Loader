@@ -15,7 +15,7 @@ public final class ClientPlayerJoinNotification {
     private static boolean notified = false;
     private ClientPlayerJoinNotification() {}
     @SubscribeEvent public static void onJoin(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingIn event) {
-        if (notified) return; ClientModelManager.runPendingModelCallback(); ClientModelManager.restoreSelectedLocalOnlyModel(); notified = true;
+        if (notified) return; ClientModelManager.runPendingModelCallback(); ClientModelManager.restorePersistedModelSelection(); notified = true;
         if (!YesSteveModel.isAvailable()) { YesSteveModel.sendUnavailableMessage(); return; }
         if (Minecraft.getInstance().isLocalServer()) return;
         Thread t = new Thread(() -> { try { Thread.sleep(60000L); Minecraft.getInstance().execute(() -> { LocalPlayer p = Minecraft.getInstance().player; if (p != null && p.connection.isAcceptingMessages() && !NetworkHandler.isConnectionValid(p.connection.getConnection())) p.sendSystemMessage(Component.translatable("message.yes_steve_model.client.server_not_found")); }); } catch (InterruptedException ignored) {} });

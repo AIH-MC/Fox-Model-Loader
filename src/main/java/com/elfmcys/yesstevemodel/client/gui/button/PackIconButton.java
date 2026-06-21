@@ -45,8 +45,23 @@ public class PackIconButton extends Button {
             guiGraphics.blit(location, getX(), getY(), 0.0f, 0.0f, this.width, this.height, this.width, this.height);
         }
         RenderSystem.disableBlend();
-        List listSplit = font.split(getMessage(), 45);
-        if (listSplit.size() > 1) {
+        int maxTextWidth = this.width - 4;
+        List listSplit = font.split(getMessage(), maxTextWidth);
+        if (listSplit.size() > 2) {
+            String plainText = getMessage().getString();
+            String truncated = plainText;
+            while (font.split(Component.literal(truncated + "..."), maxTextWidth).size() > 2 && truncated.length() > 1) {
+                truncated = truncated.substring(0, truncated.length() - 1);
+            }
+            Component truncatedMsg = Component.literal(truncated + "...");
+            List truncatedSplit = font.split(truncatedMsg, maxTextWidth);
+            if (truncatedSplit.size() > 1) {
+                drawCenteredString(guiGraphics, font, (FormattedCharSequence) truncatedSplit.get(0), getX() + (this.width / 2), (getY() + this.height) - 19, 5592405);
+                drawCenteredString(guiGraphics, font, (FormattedCharSequence) truncatedSplit.get(1), getX() + (this.width / 2), (getY() + this.height) - 10, 5592405);
+            } else {
+                drawCenteredString(guiGraphics, font, truncatedMsg, getX() + (this.width / 2), (getY() + this.height) - 15, 5592405);
+            }
+        } else if (listSplit.size() > 1) {
             drawCenteredString(guiGraphics, font, (FormattedCharSequence) listSplit.get(0), getX() + (this.width / 2), (getY() + this.height) - 19, 5592405);
             drawCenteredString(guiGraphics, font, (FormattedCharSequence) listSplit.get(1), getX() + (this.width / 2), (getY() + this.height) - 10, 5592405);
         } else {

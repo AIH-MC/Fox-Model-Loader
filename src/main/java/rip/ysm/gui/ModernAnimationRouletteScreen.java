@@ -1,9 +1,13 @@
 package rip.ysm.gui;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.animation.custom.CustomRouletteStore;
+import com.elfmcys.yesstevemodel.client.animation.custom.CustomRouletteLayout;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.client.event.AnimationLockEvent;
+import com.elfmcys.yesstevemodel.client.gui.CustomRouletteEditorScreen;
 import com.elfmcys.yesstevemodel.client.gui.ModelMetadataPresenter;
+import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
 import com.elfmcys.yesstevemodel.client.gui.custom.ExtraAnimationButtons;
 import com.elfmcys.yesstevemodel.client.input.AnimationRouletteKey;
 import com.elfmcys.yesstevemodel.client.input.ExtraAnimationKey;
@@ -37,6 +41,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import rip.ysm.api.client.KeyMappingFactory;
 import rip.ysm.gpu.Pie;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +54,13 @@ public class ModernAnimationRouletteScreen extends Screen {
 
     private static final LinkedList<Pair<String, Integer>> navigationStack = Lists.newLinkedList();
     private static String lastModelId = StringPool.EMPTY;
+
+    // --- Custom roulette layout static state ---
+    private static OrderedStringMap<String, String> customRootProperties = null;
+    private static Map<String, OrderedStringMap<String, String>> customClassifyMap = null;
+    private static Map<String, Integer> customOriginalIndexMap = new HashMap<>();
+    private static Map<String, String> customOriginalCategoryMap = new HashMap<>();
+    private static boolean usingCustomLayout = false;
 
     private int centerX;
     private int centerY;
@@ -71,18 +83,53 @@ public class ModernAnimationRouletteScreen extends Screen {
         super(Component.literal("YSM Roulette"));
         this.renderContext = modelAssembly;
         this.animatableModel = animatable;
-        this.textProperties = modelAssembly.getModelData().getModelProperties().getExtraAnimationClassify();
-        this.renderGroups = modelAssembly.getModelData().getModelProperties().getExtraAnimationButtons();
+
+        // --- Custom roulette layout ---
+        OrderedStringMap<String, String> customRoot = null;
+        Map<String, OrderedStringMap<String, String>> customClassify = null;
+
         if (!lastModelId.equals(modelId)) {
             navigationStack.clear();
             lastModelId = modelId;
+            if (GeneralConfig.ROULETTE_CONTENT_MODE.get() == GeneralConfig.RouletteContentMode.CUSTOM) {
+                CustomRouletteLayout layout = CustomRouletteStore.load(modelId);
+                if (layout != null) {
+                    usingCustomLayout = true;
+                    customRoot = CustomRouletteStore.buildRootMap(layout);
+                    customClassify = CustomRouletteStore.buildClassifyMap(layout);
+                    customOriginalIndexMap = CustomRouletteStore.buildIndexMap(layout);
+                    customOriginalCategoryMap = CustomRouletteStore.buildCategoryMap(layout);
+                    customRootProperties = customRoot;
+                    customClassifyMap = customClassify;
+                } else {
+                    usingCustomLayout = false;
+                    customRootProperties = null;
+                    customClassifyMap = null;
+                    customOriginalIndexMap.clear();
+                    customOriginalCategoryMap.clear();
+                }
+            } else {
+                usingCustomLayout = false;
+                customRootProperties = null;
+                customClassifyMap = null;
+                customOriginalIndexMap.clear();
+                customOriginalCategoryMap.clear();
+            }
+        } else {
+            if (usingCustomLayout) {
+                customRoot = customRootProperties;
+                customClassify = customClassifyMap;
+            }
         }
+
+        this.textProperties = customClassify != null ? customClassify : modelAssembly.getModelData().getModelProperties().getExtraAnimationClassify();
+        this.renderGroups = modelAssembly.getModelData().getModelProperties().getExtraAnimationButtons();
         if (navigationStack.isEmpty()) navigationStack.add(MutablePair.of(StringPool.EMPTY, 0));
         this.currentNavEntry = navigationStack.peekLast();
         if (this.textProperties.containsKey(this.currentNavEntry.getLeft())) {
             this.currentProperties = this.textProperties.get(this.currentNavEntry.getLeft());
         } else {
-            this.currentProperties = modelAssembly.getModelData().getModelProperties().getExtraAnimation();
+            this.currentProperties = customRoot != null ? customRoot : modelAssembly.getModelData().getModelProperties().getExtraAnimation();
             navigationStack.clear();
             navigationStack.add(MutablePair.of(StringPool.EMPTY, this.currentNavEntry.getRight()));
             this.currentNavEntry = navigationStack.peekLast();
@@ -94,6 +141,9 @@ public class ModernAnimationRouletteScreen extends Screen {
         this.centerX = this.width / 2;
         this.centerY = this.height / 2;
         if (currentNavEntry.getRight() >= pageCount()) currentNavEntry.setValue(0);
+        addRenderableWidget(new FlatColorButton(centerX - 16, centerY + 115, 32, 16, Component.literal("Edit"), button -> {
+            Minecraft.getInstance().setScreen(new com.elfmcys.yesstevemodel.client.gui.CustomRouletteEditorScreen(lastModelId, renderContext));
+        }));
     }
 
     private int pageCount() {
@@ -409,11 +459,18 @@ public class ModernAnimationRouletteScreen extends Screen {
     private void playAnimation(String key) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (NetworkHandler.isClientConnected()) {
-            Pair<String, Integer> last = navigationStack.peekLast();
-            String submenu = (last != null && StringUtils.isNotBlank(last.getLeft())) ? last.getLeft() : StringPool.EMPTY;
             Entity entity = animatableModel.getEntity();
-            if (entity instanceof Player) NetworkHandler.sendToServer(new C2SPlayAnimationPacket(hoveredIndex, submenu));
-            else NetworkHandler.sendToServer(new C2SPlayAnimationPacket(hoveredIndex, submenu, entity.getId()));
+            if (usingCustomLayout) {
+                int realIndex = customOriginalIndexMap.getOrDefault(key, hoveredIndex);
+                String realCategory = customOriginalCategoryMap.getOrDefault(key, StringPool.EMPTY);
+                if (entity instanceof Player) NetworkHandler.sendToServer(new C2SPlayAnimationPacket(realIndex, realCategory));
+                else NetworkHandler.sendToServer(new C2SPlayAnimationPacket(realIndex, realCategory, entity.getId()));
+            } else {
+                Pair<String, Integer> last = navigationStack.peekLast();
+                String submenu = (last != null && StringUtils.isNotBlank(last.getLeft())) ? last.getLeft() : StringPool.EMPTY;
+                if (entity instanceof Player) NetworkHandler.sendToServer(new C2SPlayAnimationPacket(hoveredIndex, submenu));
+                else NetworkHandler.sendToServer(new C2SPlayAnimationPacket(hoveredIndex, submenu, entity.getId()));
+            }
         } else if (player != null) {
             PlayerCapability.get(player).ifPresent(cap -> cap.requestModelSwitch(key));
         }

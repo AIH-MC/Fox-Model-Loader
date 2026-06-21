@@ -37,6 +37,8 @@ public class GeneralConfig {
 
     public static net.neoforged.neoforge.common.ModConfigSpec.EnumValue<RouletteMode> ROULETTE_MODE;
 
+    public static net.neoforged.neoforge.common.ModConfigSpec.EnumValue<RouletteContentMode> ROULETTE_CONTENT_MODE;
+
     public static net.neoforged.neoforge.common.ModConfigSpec.BooleanValue BLUR_GUI;
 
     public static net.neoforged.neoforge.common.ModConfigSpec.EnumValue<TextureScreenMode> TEXTURE_SCREEN_MODE;
@@ -73,6 +75,11 @@ public class GeneralConfig {
     public enum RouletteMode {
         MODERN,
         CLASSIC
+    }
+
+    public enum RouletteContentMode {
+        ORIGINAL,
+        CUSTOM
     }
 
     public enum TextureScreenMode {
@@ -144,6 +151,7 @@ public class GeneralConfig {
         USE_GPU_RENDERER = builder.define("UseGpuRenderer", true);
         ROULETTE_SETTINGS_MODE = builder.defineEnum("RouletteSettingsMode", RouletteSettingsMode.MODERN);
         ROULETTE_MODE = builder.defineEnum("RouletteMode", RouletteMode.CLASSIC);
+        ROULETTE_CONTENT_MODE = builder.defineEnum("RouletteContentMode", RouletteContentMode.ORIGINAL);
         BLUR_GUI = builder.define("BlurGui", true);
         TEXTURE_SCREEN_MODE = builder.defineEnum("TextureScreenMode", TextureScreenMode.MODERN);
         MODEL_INFO_SCREEN_MODE = builder.defineEnum("ModelInfoScreenMode", ModelInfoScreenMode.MODERN);

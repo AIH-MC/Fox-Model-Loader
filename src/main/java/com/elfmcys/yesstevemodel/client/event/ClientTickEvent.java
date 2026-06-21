@@ -22,6 +22,8 @@ public final class ClientTickEvent {
         ClientModelManager.flushPendingModels(); ClientModelManager.trimUnusedGpuCaches(); ObjectPool.cleanup();
         refreshRate = c.getWindow().getRefreshRate();
         LocalPlayer p = c.player; if (p != null) PlayerCapability.get(p).ifPresent(cap -> cap.tickAnimations());
+        // 在无模组服务器上，自动恢复之前持久化的模型选择
+        ClientModelManager.restorePersistedModelSelectionOnVanillaServer();
     }
     public static int getTickCount() { return tickCount; } public static int getRefreshRate() { return refreshRate; }
 }
