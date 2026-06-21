@@ -12,6 +12,7 @@ import com.elfmcys.yesstevemodel.resource.models.ModelProperties;
 import com.elfmcys.yesstevemodel.util.data.OrderedStringMap;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.player.LocalPlayer;
@@ -194,8 +195,8 @@ public class CustomRouletteEditorScreen extends Screen {
         extractor.centeredText(this.font, Component.translatable("gui.yes_steve_model.roulette.editor.title"), this.width / 2, 8, 0xFFFFFF);
 
         // 目标指示器
-        String targetLabel = selectedGroupIndex < 0 ? "Root" :
-                (selectedGroupIndex < pendingGroups.size() ? pendingGroups.get(selectedGroupIndex).name : "Root");
+        String targetLabel = selectedGroupIndex < 0 ? I18n.get("gui.yes_steve_model.roulette.editor.root_label") :
+                (selectedGroupIndex < pendingGroups.size() ? pendingGroups.get(selectedGroupIndex).name : I18n.get("gui.yes_steve_model.roulette.editor.root_label"));
         extractor.centeredText(this.font, Component.literal("[ " + targetLabel + " ]"), this.width / 2, 22, 0xFFFFCC00);
 
         int leftX = 8;
@@ -206,9 +207,9 @@ public class CustomRouletteEditorScreen extends Screen {
         int entryHeight = 12;
 
         // 左面板标题
-        extractor.text(this.font, Component.literal("Available Animations"), leftX, topY - 2, 0xFFAAAAAA);
+        extractor.text(this.font, Component.translatable("gui.yes_steve_model.roulette.editor.available"), leftX, topY - 2, 0xFFAAAAAA);
         // 右面板标题
-        extractor.text(this.font, Component.literal("Custom Layout"), rightX, topY - 2, 0xFFAAAAAA);
+        extractor.text(this.font, Component.translatable("gui.yes_steve_model.roulette.editor.custom_layout"), rightX, topY - 2, 0xFFAAAAAA);
 
         renderLeftPanel(extractor, mouseX, mouseY, leftX, topY + 10, panelWidth, listHeight - 10, entryHeight);
         renderRightPanel(extractor, mouseX, mouseY, rightX, topY + 10, panelWidth, listHeight - 10, entryHeight);
