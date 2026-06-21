@@ -2,9 +2,12 @@ package com.elfmcys.yesstevemodel.client.gui;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
+import com.elfmcys.yesstevemodel.client.gui.button.IconButton;
 import com.elfmcys.yesstevemodel.client.gui.resource.ModelRepoClient;
 import com.elfmcys.yesstevemodel.client.gui.resource.ModelRepoEntry;
 import com.elfmcys.yesstevemodel.client.gui.resource.ResourceDownloadManager;
+import com.elfmcys.yesstevemodel.client.gui.resource.ResourceDownloadManager.TaskSnapshot;
+import com.elfmcys.yesstevemodel.client.gui.resource.ResourceDownloadManager.TaskState;
 import com.elfmcys.yesstevemodel.client.gui.resource.ResourceStationConfig;
 import com.elfmcys.yesstevemodel.client.texture.OuterFileTexture;
 import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
@@ -34,10 +37,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class ResourceStationScreen extends Screen {
-    private static final int PANEL_WIDTH = 460;
-    private static final int PANEL_HEIGHT = 250;
-    private static final int ENTRY_HEIGHT = 36;
-    private static final int PREVIEW_SIZE = 28;
+
+    private enum TabState {
+        BROWSE, SITES, DOWNLOADS
+    }
+
+    private static final int ENTRY_HEIGHT = 28;
+    private static final int PREVIEW_SIZE = 24;
+    private static final int TAB_HEIGHT = 20;
+    private static final int TOOLBAR_HEIGHT = 24;
+    private static final int FOOTER_HEIGHT = 18;
+    private static final int URL_ROW_HEIGHT = 14;
+    private static final int ICON_SIZE = 18;
     private static final ExecutorService RESOURCE_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
         Thread thread = new Thread(runnable, "YSM Resource Station");
         thread.setDaemon(true);
@@ -53,6 +64,8 @@ public class ResourceStationScreen extends Screen {
     private EditBox searchBox;
     private int guiLeft;
     private int guiTop;
+    private int panelWidth;
+    private int panelHeight;
     private int page;
     private int entriesPerPage;
     private int listRequestId;
@@ -63,73 +76,87 @@ public class ResourceStationScreen extends Screen {
     private Component status = Component.empty();
     private ChatFormatting statusColor = ChatFormatting.GRAY;
 
+    private TabState activeTab = TabState.BROWSE;
+    private int sitesListScroll = 0;
+    private int hoveredSiteIndex = -1;
+    private String preservedUrl;
+    private String preservedSearch;
+    private boolean urlFocused;
+    private boolean searchFocused;
+
     public ResourceStationScreen(PlayerModelScreen parentScreen) {
         super(Component.translatable("gui.yes_steve_model.resource_station.title"));
         this.parentScreen = parentScreen;
         this.config = ResourceStationConfig.load();
+        this.preservedUrl = this.config.selectedUrl();
+        this.preservedSearch = "";
     }
 
     @Override
     protected void init() {
         clearWidgets();
         this.closed = false;
-        this.guiLeft = (this.width - PANEL_WIDTH) / 2;
-        this.guiTop = (this.height - PANEL_HEIGHT) / 2;
-        this.entriesPerPage = Math.max(1, (PANEL_HEIGHT - 106) / ENTRY_HEIGHT);
+        this.panelWidth = Math.min(460, this.width - 20);
+        this.panelHeight = Math.min(250, this.height - 20);
+        this.guiLeft = (this.width - this.panelWidth) / 2;
+        this.guiTop = (this.height - this.panelHeight) / 2;
+        this.entriesPerPage = Math.max(1, (this.panelHeight - TAB_HEIGHT - 2 - TOOLBAR_HEIGHT - FOOTER_HEIGHT) / ENTRY_HEIGHT);
 
-        String oldUrl = this.urlBox == null ? this.config.selectedUrl() : this.urlBox.getValue();
-        String oldSearch = this.searchBox == null ? "" : this.searchBox.getValue();
-        boolean urlFocused = this.urlBox != null && this.urlBox.isFocused();
-        boolean searchFocused = this.searchBox != null && this.searchBox.isFocused();
+        this.preservedUrl = this.urlBox != null ? this.urlBox.getValue() : (this.preservedUrl != null ? this.preservedUrl : this.config.selectedUrl());
+        this.preservedSearch = this.searchBox != null ? this.searchBox.getValue() : (this.preservedSearch != null ? this.preservedSearch : "");
+        this.urlFocused = this.urlBox != null && this.urlBox.isFocused();
+        this.searchFocused = this.searchBox != null && this.searchBox.isFocused();
 
-        this.urlBox = new EditBox(this.font, this.guiLeft + 46, this.guiTop + 9, 184, 16, Component.translatable("gui.yes_steve_model.resource_station.url"));
-        this.urlBox.setMaxLength(2048);
-        this.urlBox.setValue(oldUrl);
-        this.urlBox.setTextColor(0xFFF3F3E0);
-        this.urlBox.setFocused(urlFocused);
-        addWidget(this.urlBox);
-
-        this.searchBox = new EditBox(this.font, this.guiLeft + 46, this.guiTop + 32, 134, 16, Component.translatable("gui.yes_steve_model.resource_station.search"));
-        this.searchBox.setMaxLength(256);
-        this.searchBox.setValue(oldSearch);
-        this.searchBox.setTextColor(0xFFF3F3E0);
-        this.searchBox.setFocused(searchFocused);
-        addWidget(this.searchBox);
-        if (searchFocused) {
-            setFocused(this.searchBox);
-        } else if (urlFocused) {
-            setFocused(this.urlBox);
+        switch (this.activeTab) {
+            case BROWSE -> initBrowse();
+            case SITES -> initSites();
+            case DOWNLOADS -> initDownloads();
         }
 
-        FlatColorButton previousSiteButton = new FlatColorButton(this.guiLeft + 234, this.guiTop + 8, 18, 18, Component.literal("<"), button -> switchSite(-1))
-                .setTooltipText("gui.yes_steve_model.resource_station.previous_site");
-        previousSiteButton.active = this.config.urls().size() > 1;
-        addRenderableWidget(previousSiteButton);
-        FlatColorButton nextSiteButton = new FlatColorButton(this.guiLeft + 256, this.guiTop + 8, 18, 18, Component.literal(">"), button -> switchSite(1))
-                .setTooltipText("gui.yes_steve_model.resource_station.next_site");
-        nextSiteButton.active = this.config.urls().size() > 1;
-        addRenderableWidget(nextSiteButton);
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 278, this.guiTop + 8, 48, 18, Component.translatable("gui.yes_steve_model.resource_station.refresh"), button -> refresh()));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 330, this.guiTop + 8, 40, 18, Component.translatable("gui.yes_steve_model.resource_station.save"), button -> saveUrl()));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 374, this.guiTop + 8, 54, 18, Component.translatable("gui.yes_steve_model.resource_station.queue_all"), button -> enqueueVisible()));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 184, this.guiTop + 31, 58, 18, Component.translatable("gui.yes_steve_model.resource_station.sort"), button -> cycleSort())
+        if (this.entries.isEmpty() && !this.listLoading && this.status.getString().isEmpty()) {
+            this.status = Component.translatable("gui.yes_steve_model.resource_station.empty_hint");
+            this.statusColor = ChatFormatting.GRAY;
+        }
+    }
+
+    private void initBrowse() {
+        int toolbarY = this.guiTop + TAB_HEIGHT + 2;
+        int x = this.guiLeft + 4;
+
+        addRenderableWidget(new IconButton(x, toolbarY + 3, ICON_SIZE, ICON_SIZE, 0, 32, button -> Minecraft.getInstance().setScreen(this.parentScreen))
+                .setTooltipText("gui.yes_steve_model.model.return"));
+        x += ICON_SIZE + 2;
+
+        addRenderableWidget(new IconButton(x, toolbarY + 3, ICON_SIZE, ICON_SIZE, 0, 64, button -> refresh())
+                .setTooltipText("gui.yes_steve_model.resource_station.refresh"));
+        x += ICON_SIZE + 2;
+
+        addRenderableWidget(new IconButton(x, toolbarY + 3, ICON_SIZE, ICON_SIZE, 16, 64, button -> enqueueVisible())
+                .setTooltipText("gui.yes_steve_model.resource_station.queue_all"));
+        x += ICON_SIZE + 4;
+
+        int searchBoxWidth = Math.max(60, this.panelWidth - x - this.guiLeft - ICON_SIZE * 2 - 8 - 60);
+        this.searchBox = new EditBox(this.font, x, toolbarY + 4, searchBoxWidth, 14, Component.translatable("gui.yes_steve_model.resource_station.search"));
+        this.searchBox.setMaxLength(256);
+        this.searchBox.setValue(this.preservedSearch);
+        this.searchBox.setTextColor(0xFFF3F3E0);
+        this.searchBox.setFocused(this.searchFocused);
+        addWidget(this.searchBox);
+        if (this.searchFocused) {
+            setFocused(this.searchBox);
+        }
+        x += searchBoxWidth + 4;
+
+        addRenderableWidget(new IconButton(x, toolbarY + 3, ICON_SIZE, ICON_SIZE, 32, 64, button -> cycleSort())
                 .setTooltipLines(List.of(Component.translatable("gui.yes_steve_model.resource_station.sort_mode", this.sortMode.label()))));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 246, this.guiTop + 31, 62, 18, modeLabel(), button -> toggleMode())
-                .setTooltipText("gui.yes_steve_model.resource_station.mode.tooltip"));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 10, this.guiTop + PANEL_HEIGHT - 22, 58, 16, Component.translatable("gui.yes_steve_model.model.return"), button -> Minecraft.getInstance().setScreen(this.parentScreen)));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 74, this.guiTop + PANEL_HEIGHT - 22, 74, 16, Component.translatable("gui.yes_steve_model.resource_station.download_page"), button -> Minecraft.getInstance().setScreen(new DownloadScreen(this.parentScreen, this))));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 190, this.guiTop + PANEL_HEIGHT - 22, 52, 16, Component.translatable("gui.yes_steve_model.pre_page"), button -> {
-            if (this.page > 0) {
-                this.page--;
-                init();
-            }
-        }));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + 258, this.guiTop + PANEL_HEIGHT - 22, 52, 16, Component.translatable("gui.yes_steve_model.next_page"), button -> {
-            if (this.page < maxPage(filteredEntries().size())) {
-                this.page++;
-                init();
-            }
-        }));
+        x += ICON_SIZE + 2;
+
+        boolean isMainland = this.config.preferGithubAccelerator();
+        int modeIconU = isMainland ? 48 : 128;
+        String modeTooltipKey = isMainland ? "gui.yes_steve_model.resource_station.mode.mainland" : "gui.yes_steve_model.resource_station.mode.native";
+        IconButton modeButton = new IconButton(x, toolbarY + 3, ICON_SIZE, ICON_SIZE, modeIconU, 64, button -> toggleMode());
+        modeButton.setTooltipText(modeTooltipKey);
+        addRenderableWidget(modeButton);
 
         List<ModelRepoEntry> visible = filteredEntries();
         clampPage(visible.size());
@@ -141,20 +168,86 @@ public class ResourceStationScreen extends Screen {
             }
             ModelRepoEntry entry = visible.get(index);
             int y = entryY(i);
-            FlatColorButton download = new FlatColorButton(this.guiLeft + PANEL_WIDTH - 72, y + 8, 58, 18,
+            FlatColorButton download = new FlatColorButton(this.guiLeft + this.panelWidth - 56, y + 2, 46, ENTRY_HEIGHT - 4,
                     ResourceDownloadManager.isQueued(entry)
                             ? Component.translatable("gui.yes_steve_model.resource_station.queued_short")
-                            : Component.translatable("gui.yes_steve_model.resource_station.download"),
+                            : Component.literal("\u2193"),
                     button -> enqueue(entry));
             download.active = !ResourceDownloadManager.isQueued(entry);
             addRenderableWidget(download);
             ensurePreview(entry);
         }
 
-        if (this.entries.isEmpty() && !this.listLoading && this.status.getString().isEmpty()) {
-            this.status = Component.translatable("gui.yes_steve_model.resource_station.empty_hint");
-            this.statusColor = ChatFormatting.GRAY;
+        int footerY = this.guiTop + this.panelHeight - FOOTER_HEIGHT;
+        addRenderableWidget(new IconButton(this.guiLeft + 4, footerY + 1, ICON_SIZE, FOOTER_HEIGHT - 2, 0, 32, button -> {
+            if (this.page > 0) {
+                this.page--;
+                init();
+            }
+        }));
+        addRenderableWidget(new IconButton(this.guiLeft + 4 + ICON_SIZE + 2, footerY + 1, ICON_SIZE, FOOTER_HEIGHT - 2, 160, 64, button -> {
+            if (this.page < maxPage(filteredEntries().size())) {
+                this.page++;
+                init();
+            }
+        }));
+    }
+
+    private void initSites() {
+        int contentTop = this.guiTop + TAB_HEIGHT + 2;
+        int urlY = contentTop + 4;
+        int actionY = contentTop + 22;
+
+        this.urlBox = new EditBox(this.font, this.guiLeft + 30, urlY, this.panelWidth - 40, 14, Component.translatable("gui.yes_steve_model.resource_station.url"));
+        this.urlBox.setMaxLength(2048);
+        this.urlBox.setValue(this.preservedUrl);
+        this.urlBox.setTextColor(0xFFF3F3E0);
+        this.urlBox.setFocused(this.urlFocused);
+        addWidget(this.urlBox);
+        if (this.urlFocused) {
+            setFocused(this.urlBox);
         }
+
+        int x = this.guiLeft + 4;
+
+        IconButton previousSiteButton = new IconButton(x, actionY + 1, ICON_SIZE, ICON_SIZE, 0, 32, button -> switchSite(-1));
+        previousSiteButton.setTooltipText("gui.yes_steve_model.resource_station.previous_site");
+        previousSiteButton.active = this.config.urls().size() > 1;
+        addRenderableWidget(previousSiteButton);
+        x += ICON_SIZE + 2;
+
+        IconButton nextSiteButton = new IconButton(x, actionY + 1, ICON_SIZE, ICON_SIZE, 160, 64, button -> switchSite(1));
+        nextSiteButton.setTooltipText("gui.yes_steve_model.resource_station.next_site");
+        nextSiteButton.active = this.config.urls().size() > 1;
+        addRenderableWidget(nextSiteButton);
+        x += ICON_SIZE + 2;
+
+        addRenderableWidget(new IconButton(x, actionY + 1, ICON_SIZE, ICON_SIZE, 64, 64, button -> saveUrl())
+                .setTooltipText("gui.yes_steve_model.resource_station.save"));
+        x += ICON_SIZE + 2;
+
+        addRenderableWidget(new IconButton(x, actionY + 1, ICON_SIZE, ICON_SIZE, 80, 64, button -> deleteUrl())
+                .setTooltipText("gui.yes_steve_model.resource_station.delete_url"));
+
+        int footerY = this.guiTop + this.panelHeight - FOOTER_HEIGHT;
+        addRenderableWidget(new IconButton(this.guiLeft + 4, footerY + 1, ICON_SIZE, FOOTER_HEIGHT - 2, 0, 32, button -> Minecraft.getInstance().setScreen(this.parentScreen))
+                .setTooltipText("gui.yes_steve_model.model.return"));
+    }
+
+    private void initDownloads() {
+        int footerY = this.guiTop + this.panelHeight - FOOTER_HEIGHT;
+
+        addRenderableWidget(new IconButton(this.guiLeft + 4, footerY + 1, ICON_SIZE, FOOTER_HEIGHT - 2, 0, 32, button -> Minecraft.getInstance().setScreen(this.parentScreen))
+                .setTooltipText("gui.yes_steve_model.model.return"));
+        addRenderableWidget(new IconButton(this.guiLeft + 4 + ICON_SIZE + 2, footerY + 1, ICON_SIZE, FOOTER_HEIGHT - 2, 96, 64, button -> ResourceDownloadManager.clearFinished())
+                .setTooltipText("gui.yes_steve_model.resource_station.clear_finished"));
+        ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
+        IconButton cancelButton = new IconButton(this.guiLeft + 4 + ICON_SIZE * 2 + 4, footerY + 1, ICON_SIZE, FOOTER_HEIGHT - 2, 112, 64, button -> {
+            ResourceDownloadManager.cancelCurrent();
+            init();
+        });
+        cancelButton.active = snapshot.currentTask() != null;
+        addRenderableWidget(cancelButton);
     }
 
     @Override
@@ -179,31 +272,77 @@ public class ResourceStationScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderTransparentBackground(guiGraphics);
-        guiGraphics.fill(this.guiLeft, this.guiTop, this.guiLeft + PANEL_WIDTH, this.guiTop + PANEL_HEIGHT, 0xE0202020);
-        guiGraphics.fill(this.guiLeft, this.guiTop, this.guiLeft + PANEL_WIDTH, this.guiTop + 2, 0xFFB15D2B);
-        guiGraphics.drawString(this.font, this.title, this.guiLeft + 10, this.guiTop - 14, 0xFFE9E0D0, false);
-        guiGraphics.drawString(this.font, Component.translatable("gui.yes_steve_model.resource_station.url"), this.guiLeft + 10, this.guiTop + 12, 0xFFAFAFAF, false);
-        guiGraphics.drawString(this.font, Component.translatable("gui.yes_steve_model.resource_station.search"), this.guiLeft + 10, this.guiTop + 35, 0xFFAFAFAF, false);
-        this.urlBox.render(guiGraphics, mouseX, mouseY, partialTick);
-        this.searchBox.render(guiGraphics, mouseX, mouseY, partialTick);
-
-        renderEntries(guiGraphics);
+        guiGraphics.fill(this.guiLeft, this.guiTop, this.guiLeft + this.panelWidth, this.guiTop + this.panelHeight, 0xE0202020);
+        renderTabBar(guiGraphics);
+        guiGraphics.fill(this.guiLeft, this.guiTop + TAB_HEIGHT, this.guiLeft + this.panelWidth, this.guiTop + TAB_HEIGHT + 2, 0xFFB15D2B);
+        renderContent(guiGraphics, mouseX, mouseY, partialTick);
         renderFooter(guiGraphics);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         renderButtonTooltips(guiGraphics, mouseX, mouseY);
     }
 
+    private void renderTabBar(GuiGraphics guiGraphics) {
+        int tabWidth = this.panelWidth / 3;
+        TabState[] tabs = TabState.values();
+        for (int i = 0; i < tabs.length; i++) {
+            TabState tab = tabs[i];
+            int tabX = this.guiLeft + i * tabWidth;
+            boolean selected = this.activeTab == tab;
+            int bgColor = selected ? 0xFFB15D2B : 0x40404040;
+            int textColor = selected ? 0xFFFFFFFF : 0xFF9A9A9A;
+            guiGraphics.fill(tabX, this.guiTop, tabX + tabWidth, this.guiTop + TAB_HEIGHT, bgColor);
+
+            String symbol = switch (tab) {
+                case BROWSE -> "\u2261";
+                case SITES -> "\u25CE";
+                case DOWNLOADS -> "\u2193";
+            };
+            Component text = Component.translatable("gui.yes_steve_model.resource_station.tab." + switch (tab) {
+                case BROWSE -> "browse";
+                case SITES -> "sites";
+                case DOWNLOADS -> "downloads";
+            });
+            int symbolWidth = this.font.width(symbol);
+            int textWidth = this.font.width(text);
+            int totalWidth = symbolWidth + 4 + textWidth;
+            int contentX = tabX + (tabWidth - totalWidth) / 2;
+            guiGraphics.drawString(this.font, symbol, contentX, this.guiTop + (TAB_HEIGHT - 8) / 2, textColor, false);
+            guiGraphics.drawString(this.font, text, contentX + symbolWidth + 4, this.guiTop + (TAB_HEIGHT - 8) / 2, textColor, false);
+        }
+    }
+
+    private void renderContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        switch (this.activeTab) {
+            case BROWSE -> renderBrowseContent(guiGraphics, mouseX, mouseY, partialTick);
+            case SITES -> renderSitesContent(guiGraphics, mouseX, mouseY, partialTick);
+            case DOWNLOADS -> renderDownloadsContent(guiGraphics);
+        }
+    }
+
+    private void renderBrowseContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        if (this.searchBox != null) {
+            this.searchBox.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+
+        int total = filteredEntries().size();
+        String pageText = (Math.min(this.page, maxPage(total)) + 1) + "/" + (maxPage(total) + 1) + " (" + total + ")";
+        guiGraphics.drawString(this.font, pageText, this.guiLeft + this.panelWidth - 10 - this.font.width(pageText), this.guiTop + TAB_HEIGHT + 6, 0xFF9A9A9A, false);
+
+        renderEntries(guiGraphics);
+    }
+
     private void renderEntries(GuiGraphics guiGraphics) {
-        int listTop = this.guiTop + 58;
-        int listBottom = this.guiTop + PANEL_HEIGHT - 30;
-        guiGraphics.fill(this.guiLeft + 8, listTop - 2, this.guiLeft + PANEL_WIDTH - 8, listBottom, 0x66000000);
+        int listTop = entryY(0);
+        int listBottom = this.guiTop + this.panelHeight - FOOTER_HEIGHT - 2;
+        int pw = this.panelWidth;
+        guiGraphics.fill(this.guiLeft + 4, listTop - 2, this.guiLeft + pw - 4, listBottom, 0x66000000);
         List<ModelRepoEntry> visible = filteredEntries();
         if (this.listLoading) {
-            guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.resource_station.loading"), this.guiLeft + PANEL_WIDTH / 2, listTop + 42, 0xFFE8D9B8);
+            guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.resource_station.loading"), this.guiLeft + pw / 2, listTop + 42, 0xFFE8D9B8);
             return;
         }
         if (visible.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.resource_station.no_results"), this.guiLeft + PANEL_WIDTH / 2, listTop + 42, 0xFF8F8F8F);
+            guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.resource_station.no_results"), this.guiLeft + pw / 2, listTop + 42, 0xFF8F8F8F);
             return;
         }
         int start = this.page * this.entriesPerPage;
@@ -215,20 +354,103 @@ public class ResourceStationScreen extends Screen {
             ModelRepoEntry entry = visible.get(index);
             int y = entryY(i);
             int bg = (i & 1) == 0 ? 0x77313131 : 0x77262626;
-            guiGraphics.fill(this.guiLeft + 10, y, this.guiLeft + PANEL_WIDTH - 10, y + ENTRY_HEIGHT - 2, bg);
+            guiGraphics.fill(this.guiLeft + 6, y, this.guiLeft + pw - 6, y + ENTRY_HEIGHT - 2, bg);
             ResourceLocation preview = this.previewTextures.get(entry.url());
             if (preview != null) {
-                guiGraphics.blit(preview, this.guiLeft + 14, y + 4, 0.0f, 0.0f, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_SIZE);
+                guiGraphics.blit(preview, this.guiLeft + 10, y + 2, 0.0f, 0.0f, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_SIZE);
             } else {
-                guiGraphics.fill(this.guiLeft + 14, y + 4, this.guiLeft + 14 + PREVIEW_SIZE, y + 4 + PREVIEW_SIZE, 0xAA101010);
+                guiGraphics.fill(this.guiLeft + 10, y + 2, this.guiLeft + 10 + PREVIEW_SIZE, y + 2 + PREVIEW_SIZE, 0xAA101010);
             }
-            int textX = this.guiLeft + 48;
-            guiGraphics.drawString(this.font, trim(entry.name(), 210), textX, y + 4, 0xFFEDE1CC, false);
+            int textX = this.guiLeft + 10 + PREVIEW_SIZE + 4;
+            guiGraphics.drawString(this.font, trim(entry.name(), pw - textX - 60), textX, y + 2, 0xFFEDE1CC, false);
             String detail = detailLine(entry);
-            guiGraphics.drawString(this.font, trim(detail, 248), textX, y + 15, 0xFF9FA8A6, false);
-            if (!entry.description().isBlank()) {
-                guiGraphics.drawString(this.font, trim(entry.description(), 248), textX, y + 26, 0xFF8C8C8C, false);
+            guiGraphics.drawString(this.font, trim(detail, pw - textX - 60), textX, y + 14, 0xFF9A9A9A, false);
+        }
+    }
+
+    private void renderSitesContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        int contentTop = this.guiTop + TAB_HEIGHT + 2;
+
+        guiGraphics.drawString(this.font, Component.translatable("gui.yes_steve_model.resource_station.url"), this.guiLeft + 6, contentTop + 6, 0xFFAFAFAF, false);
+        if (this.urlBox != null) {
+            this.urlBox.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+
+        int listTop = contentTop + 42;
+        int listBottom = this.guiTop + this.panelHeight - FOOTER_HEIGHT - 2;
+        int pw = this.panelWidth;
+        List<String> urls = this.config.urls();
+        int maxVisible = Math.max(1, (listBottom - listTop) / URL_ROW_HEIGHT);
+
+        this.hoveredSiteIndex = -1;
+        if (mouseY >= listTop && mouseY < listBottom && mouseX >= this.guiLeft + 4 && mouseX < this.guiLeft + pw - 4) {
+            int row = (int) ((mouseY - listTop) / URL_ROW_HEIGHT) + this.sitesListScroll;
+            if (row >= 0 && row < urls.size()) {
+                this.hoveredSiteIndex = row;
             }
+        }
+
+        guiGraphics.fill(this.guiLeft + 4, listTop - 2, this.guiLeft + pw - 4, listBottom, 0x66000000);
+
+        int visibleCount = Math.min(maxVisible, urls.size() - this.sitesListScroll);
+        for (int i = 0; i < visibleCount; i++) {
+            int index = i + this.sitesListScroll;
+            String url = urls.get(index);
+            int rowY = listTop + i * URL_ROW_HEIGHT;
+            boolean isActive = url.equals(this.config.selectedUrl());
+            boolean isHovered = index == this.hoveredSiteIndex;
+            if (isActive) {
+                guiGraphics.fill(this.guiLeft + 6, rowY, this.guiLeft + pw - 6, rowY + URL_ROW_HEIGHT - 1, 0x40B15D2B);
+            } else if (isHovered) {
+                guiGraphics.fill(this.guiLeft + 6, rowY, this.guiLeft + pw - 6, rowY + URL_ROW_HEIGHT - 1, 0x30303030);
+            }
+            guiGraphics.drawString(this.font, trim(url, pw - 30), this.guiLeft + 10, rowY + 1, isActive ? 0xFFF3F3E0 : 0xFF9A9A9A, false);
+            if (isActive) {
+                guiGraphics.drawString(this.font, "\u25CF", this.guiLeft + pw - 18, rowY + 1, 0xFFB15D2B, false);
+            }
+        }
+
+        if (urls.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.resource_station.no_urls"), this.guiLeft + pw / 2, listTop + 20, 0xFF8F8F8F);
+        }
+    }
+
+    private void renderDownloadsContent(GuiGraphics guiGraphics) {
+        ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
+        int contentTop = this.guiTop + TAB_HEIGHT + 2;
+        int pw = this.panelWidth;
+        int y = contentTop + 4;
+        int statusColor = snapshot.statusColor().getColor() == null ? 0xFFBDBDBD : snapshot.statusColor().getColor();
+        guiGraphics.drawString(this.font, snapshot.status(), this.guiLeft + 6, y, statusColor, false);
+        y += 14;
+
+        List<TaskSnapshot> rows = new ArrayList<>();
+        rows.addAll(snapshot.unfinishedTasks());
+        rows.addAll(snapshot.finishedTasks().stream().limit(8).toList());
+        if (rows.isEmpty()) {
+            guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.resource_station.no_downloads"), this.guiLeft + pw / 2, contentTop + 68, 0xFF8F8F8F);
+            return;
+        }
+
+        int listBottom = this.guiTop + this.panelHeight - FOOTER_HEIGHT - 2;
+        int maxRows = Math.min((listBottom - y) / 16, rows.size());
+        int nameWidth = Math.max(60, pw - 260);
+        for (int i = 0; i < maxRows; i++) {
+            TaskSnapshot row = rows.get(i);
+            int rowY = y + i * 16;
+            guiGraphics.fill(this.guiLeft + 6, rowY - 1, this.guiLeft + pw - 6, rowY + 14, i % 2 == 0 ? 0x66313131 : 0x66262626);
+            guiGraphics.drawString(this.font, trim(row.name(), nameWidth), this.guiLeft + 10, rowY + 1, 0xFFEDE1CC, false);
+            int stateX = this.guiLeft + 10 + nameWidth + 4;
+            guiGraphics.drawString(this.font, stateLabel(row.state()), stateX, rowY + 1, stateColor(row.state()), false);
+            int barX = stateX + 30;
+            int barWidth = Math.min(70, pw - (barX - this.guiLeft) - 90);
+            int barY = rowY + 2;
+            guiGraphics.fill(barX, barY, barX + barWidth, barY + 5, 0xAA101010);
+            int fill = Math.max(0, Math.min(barWidth, (int) (row.progress() * barWidth)));
+            guiGraphics.fill(barX, barY, barX + fill, barY + 5, 0xFFB15D2B);
+            int msgX = barX + barWidth + 4;
+            int msgWidth = Math.max(40, pw - (msgX - this.guiLeft) - 10);
+            guiGraphics.drawString(this.font, trim(row.message().getString(), msgWidth), msgX, rowY + 1, 0xFF9FA8A6, false);
         }
     }
 
@@ -237,14 +459,73 @@ public class ResourceStationScreen extends Screen {
         Component message = snapshot.status().getString().isBlank() ? this.status : snapshot.status();
         ChatFormatting color = snapshot.status().getString().isBlank() ? this.statusColor : snapshot.statusColor();
         int colorValue = color.getColor() == null ? 0xFFBDBDBD : color.getColor();
-        guiGraphics.drawString(this.font, message, this.guiLeft + 314, this.guiTop + PANEL_HEIGHT - 18, colorValue, false);
-        int total = filteredEntries().size();
-        String pageText = (Math.min(this.page, maxPage(total)) + 1) + "/" + (maxPage(total) + 1) + " (" + total + ")";
-        guiGraphics.drawString(this.font, pageText, this.guiLeft + PANEL_WIDTH - 62, this.guiTop + 35, 0xFF9A9A9A, false);
+        int footerY = this.guiTop + this.panelHeight - FOOTER_HEIGHT;
+        guiGraphics.drawString(this.font, message, this.guiLeft + this.panelWidth - 6 - this.font.width(message), footerY + 4, colorValue, false);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (mouseY >= this.guiTop && mouseY < this.guiTop + TAB_HEIGHT) {
+            int tabWidth = this.panelWidth / 3;
+            for (int i = 0; i < 3; i++) {
+                int tabX = this.guiLeft + i * tabWidth;
+                if (mouseX >= tabX && mouseX < tabX + tabWidth) {
+                    TabState newTab = TabState.values()[i];
+                    if (this.activeTab != newTab) {
+                        this.activeTab = newTab;
+                        init();
+                    }
+                    return true;
+                }
+            }
+        }
+
+        if (this.activeTab == TabState.SITES) {
+            int contentTop = this.guiTop + TAB_HEIGHT + 2;
+            int listTop = contentTop + 42;
+            int listBottom = this.guiTop + this.panelHeight - FOOTER_HEIGHT - 2;
+            if (mouseY >= listTop && mouseY < listBottom && mouseX >= this.guiLeft + 4 && mouseX < this.guiLeft + this.panelWidth - 4) {
+                int row = (int) ((mouseY - listTop) / URL_ROW_HEIGHT) + this.sitesListScroll;
+                List<String> urls = this.config.urls();
+                if (row >= 0 && row < urls.size()) {
+                    String selected = urls.get(row);
+                    if (!selected.equals(this.config.selectedUrl())) {
+                        this.config = new ResourceStationConfig.State(urls, selected, this.config.timeoutMs(), this.config.maxDownloadBytes(), this.config.preferGithubAccelerator(), this.config.githubAccelerators());
+                        ResourceStationConfig.save(this.config);
+                        this.preservedUrl = selected;
+                        this.entries.clear();
+                        this.previewTextures.clear();
+                        this.loadingPreviews.clear();
+                        this.page = 0;
+                        this.status = Component.translatable("gui.yes_steve_model.resource_station.site_selected", row + 1, urls.size());
+                        this.statusColor = ChatFormatting.GRAY;
+                        init();
+                    }
+                    return true;
+                }
+            }
+        }
+
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (this.activeTab == TabState.SITES) {
+            int contentTop = this.guiTop + TAB_HEIGHT + 2;
+            int listTop = contentTop + 42;
+            int listBottom = this.guiTop + this.panelHeight - FOOTER_HEIGHT - 2;
+            if (mouseY >= listTop && mouseY < listBottom) {
+                int maxVisible = Math.max(1, (listBottom - listTop) / URL_ROW_HEIGHT);
+                int maxScroll = Math.max(0, this.config.urls().size() - maxVisible);
+                this.sitesListScroll = (int) Math.max(0, Math.min(this.sitesListScroll - (int) scrollY, maxScroll));
+                return true;
+            }
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     private void refresh() {
-        saveUrl();
         int requestId = ++this.listRequestId;
         int generation = this.screenGeneration;
         ResourceStationConfig.State requestConfig = this.config;
@@ -290,12 +571,12 @@ public class ResourceStationScreen extends Screen {
         }
         this.config = new ResourceStationConfig.State(urls, selected, this.config.timeoutMs(), this.config.maxDownloadBytes(), this.config.preferGithubAccelerator(), this.config.githubAccelerators());
         ResourceStationConfig.save(this.config);
+        this.preservedUrl = selected;
         this.status = Component.translatable("gui.yes_steve_model.resource_station.saved");
         this.statusColor = ChatFormatting.GRAY;
     }
 
     private void switchSite(int offset) {
-        saveUrl();
         List<String> urls = this.config.urls();
         if (urls.size() <= 1) {
             return;
@@ -308,6 +589,7 @@ public class ResourceStationScreen extends Screen {
         String selected = urls.get(nextIndex);
         this.config = new ResourceStationConfig.State(urls, selected, this.config.timeoutMs(), this.config.maxDownloadBytes(), this.config.preferGithubAccelerator(), this.config.githubAccelerators());
         ResourceStationConfig.save(this.config);
+        this.preservedUrl = selected;
         if (this.urlBox != null) {
             this.urlBox.setValue(selected);
         }
@@ -408,8 +690,31 @@ public class ResourceStationScreen extends Screen {
                 }));
     }
 
+    private void deleteUrl() {
+        String selected = this.urlBox == null ? this.config.selectedUrl() : this.urlBox.getValue().trim();
+        if (selected.isBlank()) {
+            return;
+        }
+        List<String> urls = new ArrayList<>(this.config.urls());
+        if (!urls.remove(selected) || urls.isEmpty()) {
+            this.status = Component.translatable("gui.yes_steve_model.resource_station.cannot_delete");
+            this.statusColor = ChatFormatting.RED;
+            return;
+        }
+        String newSelected = urls.get(0);
+        this.config = new ResourceStationConfig.State(urls, newSelected, this.config.timeoutMs(), this.config.maxDownloadBytes(), this.config.preferGithubAccelerator(), this.config.githubAccelerators());
+        ResourceStationConfig.save(this.config);
+        this.preservedUrl = newSelected;
+        if (this.urlBox != null) {
+            this.urlBox.setValue(newSelected);
+        }
+        this.status = Component.translatable("gui.yes_steve_model.resource_station.url_deleted");
+        this.statusColor = ChatFormatting.GRAY;
+        init();
+    }
+
     private int entryY(int index) {
-        return this.guiTop + 58 + index * ENTRY_HEIGHT;
+        return this.guiTop + TAB_HEIGHT + 2 + TOOLBAR_HEIGHT + index * ENTRY_HEIGHT;
     }
 
     private int maxPage(int total) {
@@ -448,6 +753,19 @@ public class ResourceStationScreen extends Screen {
             keep--;
         }
         return value.substring(0, Math.max(0, keep)) + ellipsis;
+    }
+
+    private Component stateLabel(TaskState state) {
+        return Component.translatable("gui.yes_steve_model.resource_station.state." + state.name().toLowerCase(Locale.ROOT));
+    }
+
+    private int stateColor(TaskState state) {
+        return switch (state) {
+            case DONE -> ChatFormatting.GREEN.getColor();
+            case FAILED -> ChatFormatting.RED.getColor();
+            case CANCELLED -> ChatFormatting.GRAY.getColor();
+            default -> ChatFormatting.YELLOW.getColor();
+        };
     }
 
     private void renderButtonTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {

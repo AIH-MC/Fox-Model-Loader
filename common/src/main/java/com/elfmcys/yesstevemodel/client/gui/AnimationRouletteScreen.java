@@ -1,7 +1,10 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
+import com.elfmcys.yesstevemodel.client.animation.custom.CustomRouletteStore;
+import com.elfmcys.yesstevemodel.client.animation.custom.CustomRouletteLayout;
 import com.elfmcys.yesstevemodel.client.event.AnimationLockEvent;
 import com.elfmcys.yesstevemodel.client.gui.custom.ExtraAnimationButtons;
+import com.elfmcys.yesstevemodel.client.gui.CustomRouletteEditorScreen;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import com.elfmcys.yesstevemodel.resource.models.ModelProperties;
@@ -82,6 +85,19 @@ public class AnimationRouletteScreen extends Screen {
 
     private static String lastModelId = StringPool.EMPTY;
 
+    // --- Custom roulette layout static state ---
+    // Shared across screen instances during navigation (same model session)
+
+    private static OrderedStringMap<String, String> customRootProperties = null;
+
+    private static Map<String, OrderedStringMap<String, String>> customClassifyMap = null;
+
+    private static Map<String, Integer> customOriginalIndexMap = new HashMap<>();
+
+    private static Map<String, String> customOriginalCategoryMap = new HashMap<>();
+
+    private static boolean usingCustomLayout = false;
+
     private int centerX;
 
     private int centerY;
@@ -131,12 +147,12 @@ public class AnimationRouletteScreen extends Screen {
         this.currentNavEntry = navigationStack.peekLast();
         if (this.currentNavEntry != null && this.textProperties.containsKey(this.currentNavEntry.getLeft())) {
             this.currentProperties = this.textProperties.get(this.currentNavEntry.getLeft());
-            return;
+        } else {
+            this.currentProperties = usingCustomLayout && customRootProperties != null ? customRootProperties : this.timingConfig.getExtraAnimation();
+            navigationStack.clear();
+            navigationStack.add(MutablePair.of(StringPool.EMPTY, Integer.valueOf(this.currentNavEntry == null ? 0 : this.currentNavEntry.getRight().intValue())));
+            this.currentNavEntry = navigationStack.peekLast();
         }
-        this.currentProperties = this.timingConfig.getExtraAnimation();
-        navigationStack.clear();
-        navigationStack.add(MutablePair.of(StringPool.EMPTY, Integer.valueOf(this.currentNavEntry == null ? 0 : this.currentNavEntry.getRight().intValue())));
-        this.currentNavEntry = navigationStack.peekLast();
     }
 
     public AnimationRouletteScreen(String str, ModelAssembly modelAssembly, AnimatableEntity<?> animatableEntity) {
@@ -149,24 +165,63 @@ public class AnimationRouletteScreen extends Screen {
         this.renderContext = modelAssembly;
         this.timingConfig = modelAssembly.getModelData().getModelProperties();
         this.animatableModel = animatableEntity;
-        this.textProperties = this.timingConfig.getExtraAnimationClassify();
-        this.renderGroups = this.timingConfig.getExtraAnimationButtons();
+
+        // --- Custom roulette layout ---
+        OrderedStringMap<String, String> customRoot = null;
+        Map<String, OrderedStringMap<String, String>> customClassify = null;
+
         if (!lastModelId.equals(str)) {
+            // Model changed: recompute custom layout
             navigationStack.clear();
             lastModelId = str;
+            if (GeneralConfig.ROULETTE_CONTENT_MODE.get() == GeneralConfig.RouletteContentMode.CUSTOM) {
+                CustomRouletteLayout layout = CustomRouletteStore.load(str);
+                if (layout != null) {
+                    usingCustomLayout = true;
+                    customRoot = CustomRouletteStore.buildRootMap(layout);
+                    customClassify = CustomRouletteStore.buildClassifyMap(layout);
+                    customOriginalIndexMap = CustomRouletteStore.buildIndexMap(layout);
+                    customOriginalCategoryMap = CustomRouletteStore.buildCategoryMap(layout);
+                    customRootProperties = customRoot;
+                    customClassifyMap = customClassify;
+                } else {
+                    usingCustomLayout = false;
+                    customRootProperties = null;
+                    customClassifyMap = null;
+                    customOriginalIndexMap.clear();
+                    customOriginalCategoryMap.clear();
+                }
+            } else {
+                usingCustomLayout = false;
+                customRootProperties = null;
+                customClassifyMap = null;
+                customOriginalIndexMap.clear();
+                customOriginalCategoryMap.clear();
+            }
+        } else {
+            // Same model: reuse cached custom data
+            if (usingCustomLayout) {
+                customRoot = customRootProperties;
+                customClassify = customClassifyMap;
+            }
         }
+
+        this.textProperties = customClassify != null ? customClassify : this.timingConfig.getExtraAnimationClassify();
+        this.renderGroups = this.timingConfig.getExtraAnimationButtons();
+
         if (navigationStack.isEmpty()) {
             navigationStack.add(MutablePair.of(StringPool.EMPTY, 0));
         }
         this.currentNavEntry = navigationStack.peekLast();
+
         if (this.textProperties.containsKey(this.currentNavEntry.getLeft())) {
             this.currentProperties = this.textProperties.get(this.currentNavEntry.getLeft());
-            return;
+        } else {
+            this.currentProperties = customRoot != null ? customRoot : this.timingConfig.getExtraAnimation();
+            navigationStack.clear();
+            navigationStack.add(MutablePair.of(StringPool.EMPTY, this.currentNavEntry == null ? 0 : this.currentNavEntry.getRight()));
+            this.currentNavEntry = navigationStack.peekLast();
         }
-        this.currentProperties = this.timingConfig.getExtraAnimation();
-        navigationStack.clear();
-        navigationStack.add(MutablePair.of(StringPool.EMPTY, this.currentNavEntry.getRight()));
-        this.currentNavEntry = navigationStack.peekLast();
     }
 
     public void init() {
@@ -205,6 +260,9 @@ public class AnimationRouletteScreen extends Screen {
         }));
         addRenderableWidget(new FlatColorButton(this.centerX + 125, this.centerY - 70, 145, 22, Component.translatable("gui.yes_steve_model.model.return"), button5 -> {
             navigateBack();
+        }));
+        addRenderableWidget(new FlatColorButton(this.centerX + 125, this.centerY + 90, 145, 22, Component.literal("Edit"), buttonEdit -> {
+            Minecraft.getInstance().setScreen(new CustomRouletteEditorScreen(lastModelId, this.renderContext));
         }));
         if (this.currentConfigGroup != null) {
             this.scrollUpButton = new FlatColorButton(this.centerX + 242, this.centerY - 46, 28, 60, Component.literal("↑"), button6 -> {
@@ -513,16 +571,26 @@ public class AnimationRouletteScreen extends Screen {
     private void playAnimation(String str) {
         LocalPlayer localPlayer = Minecraft.getInstance().player;
         if (NetworkHandler.isClientConnected()) {
-            Pair<String, Integer> pairPeekLast = navigationStack.peekLast();
-            String str2 = StringPool.EMPTY;
-            if (pairPeekLast != null && StringUtils.isNotBlank(pairPeekLast.getLeft())) {
-                str2 = pairPeekLast.getLeft();
-            }
             Entity entity = this.animatableModel.getEntity();
-            if (entity instanceof Player) {
-                NetworkHandler.sendToServer(new C2SPlayAnimationPacket(this.hoveredIndex, str2));
+            if (usingCustomLayout) {
+                int realIndex = customOriginalIndexMap.getOrDefault(str, this.hoveredIndex);
+                String realCategory = customOriginalCategoryMap.getOrDefault(str, StringPool.EMPTY);
+                if (entity instanceof Player) {
+                    NetworkHandler.sendToServer(new C2SPlayAnimationPacket(realIndex, realCategory));
+                } else {
+                    NetworkHandler.sendToServer(new C2SPlayAnimationPacket(realIndex, realCategory, entity.getId()));
+                }
             } else {
-                NetworkHandler.sendToServer(new C2SPlayAnimationPacket(this.hoveredIndex, str2, entity.getId()));
+                Pair<String, Integer> pairPeekLast = navigationStack.peekLast();
+                String str2 = StringPool.EMPTY;
+                if (pairPeekLast != null && StringUtils.isNotBlank(pairPeekLast.getLeft())) {
+                    str2 = pairPeekLast.getLeft();
+                }
+                if (entity instanceof Player) {
+                    NetworkHandler.sendToServer(new C2SPlayAnimationPacket(this.hoveredIndex, str2));
+                } else {
+                    NetworkHandler.sendToServer(new C2SPlayAnimationPacket(this.hoveredIndex, str2, entity.getId()));
+                }
             }
         } else if (localPlayer != null) {
             PlayerCapability.get(localPlayer).ifPresent(cap -> {
