@@ -141,7 +141,7 @@ public class ModernAnimationRouletteScreen extends Screen {
         this.centerX = this.width / 2;
         this.centerY = this.height / 2;
         if (currentNavEntry.getRight() >= pageCount()) currentNavEntry.setValue(0);
-        addRenderableWidget(new FlatColorButton(centerX - 16, centerY + 115, 32, 16, Component.literal("Edit"), button -> {
+        addRenderableWidget(new FlatColorButton(centerX - 16, centerY + 115, 32, 16, Component.translatable("gui.yes_steve_model.roulette.editor.edit"), button -> {
             Minecraft.getInstance().setScreen(new com.elfmcys.yesstevemodel.client.gui.CustomRouletteEditorScreen(lastModelId, renderContext));
         }));
     }

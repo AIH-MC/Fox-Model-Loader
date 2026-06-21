@@ -260,7 +260,7 @@ public class AnimationRouletteScreen extends Screen {
         addRenderableWidget(new FlatColorButton(this.centerX + 125, this.centerY - 70, 145, 22, Component.translatable("gui.yes_steve_model.model.return"), button5 -> {
             navigateBack();
         }));
-        addRenderableWidget(new FlatColorButton(this.centerX + 125, this.centerY + 90, 145, 22, Component.literal("Edit"), buttonEdit -> {
+        addRenderableWidget(new FlatColorButton(this.centerX + 125, this.centerY + 90, 145, 22, Component.translatable("gui.yes_steve_model.roulette.editor.edit"), buttonEdit -> {
             Minecraft.getInstance().setScreen(new CustomRouletteEditorScreen(lastModelId, this.renderContext));
         }));
         if (this.currentConfigGroup != null) {

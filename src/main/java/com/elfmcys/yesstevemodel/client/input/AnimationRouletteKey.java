@@ -15,8 +15,8 @@ import rip.ysm.api.client.KeyMappingFactory;
 
 @EventBusSubscriber(modid = YesSteveModel.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
 public final class AnimationRouletteKey {
-    public static final KeyMapping KEY_ROULETTE = KeyMappingFactory.createInGameNone("key.yes_steve_model.roulette.desc", InputConstants.Type.KEYSYM, 90, "key.category.yes_steve_model");
-    public static final KeyMapping KEY_LOCK = KeyMappingFactory.createInGameNone("key.yes_steve_model.lock.desc", InputConstants.Type.KEYSYM, 76, "key.category.yes_steve_model");
+    public static final KeyMapping KEY_ROULETTE = KeyMappingFactory.createInGameNone("key.yes_steve_model.animation_roulette.desc", InputConstants.Type.KEYSYM, 90, "key.category.yes_steve_model");
+    public static final KeyMapping KEY_LOCK = KeyMappingFactory.createInGameNone("key.yes_steve_model.lock_roulette.desc", InputConstants.Type.KEYSYM, 76, "key.category.yes_steve_model");
     private AnimationRouletteKey() {} public static void register() {}
     @SubscribeEvent public static void onKey(InputEvent.Key event) {
         if (PlatformAPI.isServer() || !InputUtil.isPlayerReady() || event.getAction() != 1 || !YesSteveModel.isAvailable()) return;
