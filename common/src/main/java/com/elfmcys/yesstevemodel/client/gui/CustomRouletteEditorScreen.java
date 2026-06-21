@@ -12,6 +12,7 @@ import com.elfmcys.yesstevemodel.resource.models.ModelProperties;
 import com.elfmcys.yesstevemodel.util.data.OrderedStringMap;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import org.apache.commons.lang3.StringUtils;
@@ -189,8 +190,8 @@ public class CustomRouletteEditorScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, Component.translatable("gui.yes_steve_model.roulette.editor.title"), this.width / 2, 8, 0xFFFFFF);
 
         // 目标指示器
-        String targetLabel = selectedGroupIndex < 0 ? "Root" :
-                (selectedGroupIndex < pendingGroups.size() ? pendingGroups.get(selectedGroupIndex).name : "Root");
+        String targetLabel = selectedGroupIndex < 0 ? I18n.get("gui.yes_steve_model.roulette.editor.root_label") :
+                (selectedGroupIndex < pendingGroups.size() ? pendingGroups.get(selectedGroupIndex).name : I18n.get("gui.yes_steve_model.roulette.editor.root_label"));
         guiGraphics.drawCenteredString(this.font, Component.literal("[ " + targetLabel + " ]"), this.width / 2, 22, 0xFFFFCC00);
 
         int leftX = 8;
@@ -201,9 +202,9 @@ public class CustomRouletteEditorScreen extends Screen {
         int entryHeight = 12;
 
         // 左面板标题
-        guiGraphics.drawString(this.font, Component.literal("Available Animations"), leftX, topY - 2, 0xFFAAAAAA, false);
+        guiGraphics.drawString(this.font, Component.translatable("gui.yes_steve_model.roulette.editor.available"), leftX, topY - 2, 0xFFAAAAAA, false);
         // 右面板标题
-        guiGraphics.drawString(this.font, Component.literal("Custom Layout"), rightX, topY - 2, 0xFFAAAAAA, false);
+        guiGraphics.drawString(this.font, Component.translatable("gui.yes_steve_model.roulette.editor.custom_layout"), rightX, topY - 2, 0xFFAAAAAA, false);
 
         renderLeftPanel(guiGraphics, mouseX, mouseY, leftX, topY + 10, panelWidth, listHeight - 10, entryHeight);
         renderRightPanel(guiGraphics, mouseX, mouseY, rightX, topY + 10, panelWidth, listHeight - 10, entryHeight);
