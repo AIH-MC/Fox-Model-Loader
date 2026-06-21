@@ -44,12 +44,27 @@ public class PackIconButton extends Button {
         guiGraphics.blit(iconLocation, getX(), getY(), getX() + this.width, getY() + this.height, 0.0f, 1.0f, 0.0f, 1.0f);
         GlStateManager._disableBlend();
         guiGraphics.fillGradient(getX(), getY() + this.height - 24, getX() + this.width, getY() + this.height, 0xAA000000, 0xAA000000);
-        List listSplit = font.split(getMessage(), 45);
-        if (listSplit.size() > 1) {
-            drawCenteredString(guiGraphics, font, (FormattedCharSequence) listSplit.get(0), getX() + (this.width / 2), (getY() + this.height) - 19, 0xFFFFFFFF);
-            drawCenteredString(guiGraphics, font, (FormattedCharSequence) listSplit.get(1), getX() + (this.width / 2), (getY() + this.height) - 10, 0xFFFFFFFF);
+        int maxTextWidth = this.width - 4;
+        List listSplit = font.split(getMessage(), maxTextWidth);
+        if (listSplit.size() > 2) {
+            String plainText = getMessage().getString();
+            String truncated = plainText;
+            while (font.split(Component.literal(truncated + "..."), maxTextWidth).size() > 2 && truncated.length() > 1) {
+                truncated = truncated.substring(0, truncated.length() - 1);
+            }
+            Component truncatedMsg = Component.literal(truncated + "...");
+            List truncatedSplit = font.split(truncatedMsg, maxTextWidth);
+            if (truncatedSplit.size() > 1) {
+                drawCenteredString(guiGraphics, font, (FormattedCharSequence) truncatedSplit.get(0), getX() + (this.width / 2), (getY() + this.height) - 19, 0xFF557777);
+                drawCenteredString(guiGraphics, font, (FormattedCharSequence) truncatedSplit.get(1), getX() + (this.width / 2), (getY() + this.height) - 10, 0xFF557777);
+            } else {
+                drawCenteredString(guiGraphics, font, truncatedMsg, getX() + (this.width / 2), (getY() + this.height) - 15, 0xFF557777);
+            }
+        } else if (listSplit.size() > 1) {
+            drawCenteredString(guiGraphics, font, (FormattedCharSequence) listSplit.get(0), getX() + (this.width / 2), (getY() + this.height) - 19, 0xFF557777);
+            drawCenteredString(guiGraphics, font, (FormattedCharSequence) listSplit.get(1), getX() + (this.width / 2), (getY() + this.height) - 10, 0xFF557777);
         } else {
-            drawCenteredString(guiGraphics, font, getMessage(), getX() + (this.width / 2), (getY() + this.height) - 15, 0xFFFFFFFF);
+            drawCenteredString(guiGraphics, font, getMessage(), getX() + (this.width / 2), (getY() + this.height) - 15, 0xFF557777);
         }
         if (isHoveredOrFocused()) {
             guiGraphics.fillGradient(getX(), getY() + 1, getX() + 1, (getY() + this.height) - 1, -1982745, -1982745);
@@ -66,20 +81,16 @@ public class PackIconButton extends Button {
         }
         List<Component> listSingletonList = Collections.singletonList(Component.literal(str));
         if (isHovered()) {
-            guiGraphics.pose().pushMatrix();
-            guiGraphics.pose().translate(0.0f, 0.0f);
             guiGraphics.setComponentTooltipForNextFrame(Minecraft.getInstance().font, listSingletonList, mouseX, mouseY);
-/*             GuiGraphicsExtractor.renderComponentTooltip(Minecraft.getInstance().font, listSingletonList, mouseX, mouseY); */
-            guiGraphics.pose().popMatrix();
         }
     }
 
     private static void drawCenteredString(GuiGraphicsExtractor guiGraphics, Font font, Component component, int centerX, int y, int color) {
-        guiGraphics.text(font, component, centerX - (font.width(component) / 2), y, color, true);
+        guiGraphics.text(font, component, centerX - (font.width(component) / 2), y, color, false);
     }
 
     private static void drawCenteredString(GuiGraphicsExtractor guiGraphics, Font font, FormattedCharSequence formattedCharSequence, int centerX, int y, int color) {
-        guiGraphics.text(font, formattedCharSequence, centerX - (font.width(formattedCharSequence) / 2), y, color, true);
+        guiGraphics.text(font, formattedCharSequence, centerX - (font.width(formattedCharSequence) / 2), y, color, false);
     }
 
     private static Identifier getReadyIconLocation(Minecraft minecraft, Identifier location, OuterFileTexture packIconTexture) {

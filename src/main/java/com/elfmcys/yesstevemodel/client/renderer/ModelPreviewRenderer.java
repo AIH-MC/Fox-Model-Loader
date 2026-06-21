@@ -164,12 +164,12 @@ public final class ModelPreviewRenderer {
         return DIRECT_GUI_PREVIEWS_SUPPORTED;
     }
 
-    public static boolean renderQueuedGuiPreview(EntityRenderState renderState, PoseStack poseStack, SubmitNodeCollector collector) {
+    public static boolean renderQueuedGuiPreview(EntityRenderState renderState, PoseStack poseStack, SubmitNodeCollector collector, MultiBufferSource.BufferSource bufferSource) {
         GuiPreviewRequest request = GUI_PREVIEWS.remove(renderState);
         if (request == null) {
             return false;
         }
-        request.render(poseStack, collector);
+        request.render(poseStack, collector, bufferSource);
         return true;
     }
 
@@ -221,7 +221,7 @@ public final class ModelPreviewRenderer {
     }
 
     private interface GuiPreviewRequest {
-        void render(PoseStack poseStack, SubmitNodeCollector collector);
+        void render(PoseStack poseStack, SubmitNodeCollector collector, MultiBufferSource.BufferSource bufferSource);
     }
 
     private static final class LivingGuiPreviewRequest implements GuiPreviewRequest {
@@ -250,8 +250,8 @@ public final class ModelPreviewRenderer {
         }
 
         @Override
-        public void render(PoseStack poseStack, SubmitNodeCollector collector) {
-            renderLivingGuiPreview(poseStack, offsetX, offsetY, partialTick, animatable, renderer, disablePreviewRotation, hideEquipment, previewYaw, previewPitch, extraPlayer, collector);
+        public void render(PoseStack poseStack, SubmitNodeCollector collector, MultiBufferSource.BufferSource bufferSource) {
+            renderLivingGuiPreview(poseStack, offsetX, offsetY, partialTick, animatable, renderer, disablePreviewRotation, hideEquipment, previewYaw, previewPitch, extraPlayer, collector, bufferSource);
         }
     }
 
@@ -277,13 +277,13 @@ public final class ModelPreviewRenderer {
         }
 
         @Override
-        public void render(PoseStack poseStack, SubmitNodeCollector collector) {
-            renderFreeGuiPreview(poseStack, offsetX, offsetY, pitch, yaw, partialTick, animatableEntity, renderer, renderGround);
+        public void render(PoseStack poseStack, SubmitNodeCollector collector, MultiBufferSource.BufferSource bufferSource) {
+            renderFreeGuiPreview(poseStack, offsetX, offsetY, pitch, yaw, partialTick, animatableEntity, renderer, renderGround, bufferSource);
         }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void renderLivingGuiPreview(PoseStack poseStack, float offsetX, float offsetY, float partialTick, LivingAnimatable animatable, GeoReplacedEntityRenderer renderer, boolean disablePreviewRotation, boolean hideEquipment, float previewYaw, float previewPitch, boolean extraPlayer, SubmitNodeCollector collector) {
+    private static void renderLivingGuiPreview(PoseStack poseStack, float offsetX, float offsetY, float partialTick, LivingAnimatable animatable, GeoReplacedEntityRenderer renderer, boolean disablePreviewRotation, boolean hideEquipment, float previewYaw, float previewPitch, boolean extraPlayer, SubmitNodeCollector collector, MultiBufferSource.BufferSource bufferSource) {
         ItemStack[] savedEquipment;
         boolean previousPreviewMode = isPreview();
         boolean previousExtraPlayerMode = isExtraPlayer();
@@ -342,7 +342,6 @@ public final class ModelPreviewRenderer {
             livingEntity.yHeadRotO = vehicleYaw;
         }
 
-        MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
         try {
             Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
             renderer.renderEntity(animatable, 0.0f, partialTick, poseStack, bufferSource, 15728880);
@@ -367,7 +366,7 @@ public final class ModelPreviewRenderer {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void renderFreeGuiPreview(PoseStack poseStack, float offsetX, float offsetY, float pitch, float yaw, float partialTick, AnimatableEntity animatableEntity, GeoReplacedEntityRenderer renderer, boolean renderGround) {
+    private static void renderFreeGuiPreview(PoseStack poseStack, float offsetX, float offsetY, float pitch, float yaw, float partialTick, AnimatableEntity animatableEntity, GeoReplacedEntityRenderer renderer, boolean renderGround, MultiBufferSource.BufferSource bufferSource) {
         boolean previousPreviewMode = isPreview();
         setPreviewMode(true);
         LivingEntity livingEntity = (LivingEntity) animatableEntity.getEntity();
@@ -398,7 +397,6 @@ public final class ModelPreviewRenderer {
         livingEntity.yHeadRot = -yaw;
         livingEntity.yHeadRotO = -yaw;
 
-        MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
         try {
             Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
             AnimationTracker animationTracker = getPreviewAnimationTracker(animatableEntity);
@@ -861,8 +859,6 @@ public final class ModelPreviewRenderer {
             }
             setExtraPlayerMode(false);
         }
-
-/*         GuiGraphicsExtractor.flush(); */
     }
 
     public static boolean renderCustomLocalPlayerPreview(GuiGraphicsExtractor guiGraphics, LocalPlayer localPlayer, int left, int top, int right, int bottom, float originX, float originY, float scale, float yaw, float partialTick, boolean extraPlayer) {

@@ -510,10 +510,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             renderer = "GPU";
         }
         String strVersionString = Platform.getMod(YesSteveModel.MOD_ID).getVersion();
-        guiGraphics.pose().pushMatrix();
-        guiGraphics.pose().translate(0.0f, 0.0f);
         guiGraphics.text(this.font, strVersionString + " (" + renderer + ")", this.guiLeft + 2, this.guiTop + 226, opaque(ChatFormatting.DARK_GRAY));
-        guiGraphics.pose().popMatrix();
         if (StringUtils.isNotBlank(currentPath)) {
             int lineIndex = 0;
             List listSplit = this.font.split(Component.literal("📂 " + currentPath).withStyle(ChatFormatting.GRAY), 270);
@@ -530,13 +527,15 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             return renderable instanceof IconButton;
         }).forEach(renderable2 -> {
             ((IconButton) renderable2).renderTooltip(guiGraphics, this, mouseX, mouseY);
-/*             ((IconButton) renderable2).renderTooltip(GuiGraphicsExtractor, this, mouseX, mouseY); */
+/*             ((IconButton) renderable2).renderTooltip(GuiGraphicsExtractor, this, mouseX, mouseY);
+ */
         });
         ((ScreenAccessor) this).ysm$getRenderables().stream().filter(renderable3 -> {
             return renderable3 instanceof ModelButton;
         }).forEach(renderable4 -> {
             ((ModelButton) renderable4).renderTooltip(guiGraphics, this, mouseX, mouseY);
-/*             ((ModelButton) renderable4).renderTooltip(GuiGraphicsExtractor, this, mouseX, mouseY); */
+/*             ((ModelButton) renderable4).renderTooltip(GuiGraphicsExtractor, this, mouseX, mouseY);
+ */
         });
         ((ScreenAccessor) this).ysm$getRenderables().stream().filter(renderable5 -> {
             return renderable5 instanceof PackIconButton;
@@ -545,11 +544,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         });
         if (this.searchBox.isHovered()) {
             MutableComponent mutableComponentWithStyle = Component.translatable("gui.yes_steve_model.search.tip").withStyle(ChatFormatting.GRAY);
-            guiGraphics.pose().pushMatrix();
-            guiGraphics.pose().translate(0.0f, 0.0f);
             guiGraphics.setTooltipForNextFrame(this.font, this.font.split(mutableComponentWithStyle, 320), mouseX, mouseY);
-/*             GuiGraphicsExtractor.renderTooltip(this.font, this.font.split(mutableComponentWithStyle, 320), mouseX, mouseY); */
-            guiGraphics.pose().popMatrix();
         }
     }
 

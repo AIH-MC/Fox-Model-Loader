@@ -1,7 +1,9 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
 import com.elfmcys.yesstevemodel.client.gui.button.FlatColorButton;
+import com.elfmcys.yesstevemodel.client.gui.button.IconButton;
 import com.elfmcys.yesstevemodel.client.gui.resource.ResourceDownloadManager;
+import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -53,34 +55,30 @@ public class DownloadScreen extends Screen {
         int topY = this.guiTop + 8;
         int left = this.guiLeft + 10;
         int right = this.guiLeft + this.guiWidth - 10;
-        Component stationLabel = Component.translatable("gui.yes_steve_model.resource_station.title");
-        Component clearLabel = Component.translatable("gui.yes_steve_model.resource_station.clear_finished");
-        Component returnLabel = Component.translatable("gui.yes_steve_model.model.return");
-        int stationW = buttonWidth(stationLabel, 58, 126);
-        int returnW = buttonWidth(returnLabel, 58, 86);
-        int clearW = Math.min(buttonWidth(clearLabel, 74, 126), Math.max(74, right - left - stationW - returnW - 12));
-        if (compactHeader()) {
-            clearW = Math.max(74, right - left);
-        }
-        addRenderableWidget(new FlatColorButton(left, topY, stationW, 18, stationLabel, b -> {
+        addRenderableWidget(new IconButton(left, topY, 18, 18, 0, 32, b -> {
             Minecraft.getInstance().setScreen(this.resourceStationScreen == null ? new ResourceStationScreen(this.parentScreen) : this.resourceStationScreen);
         }));
-        int clearX = compactHeader() ? left : right - returnW - 6 - clearW;
-        int clearY = compactHeader() ? topY + 22 : topY;
-        addRenderableWidget(new FlatColorButton(clearX, clearY, clearW, 18, clearLabel, b -> {
+        IconButton clearButton = new IconButton(left + 22, topY, 18, 18, 96, 64, b -> {
             ResourceDownloadManager.clearFinished();
             this.page = 0;
             init();
-        }));
-        addRenderableWidget(new FlatColorButton(right - returnW, topY, returnW, 18, returnLabel, b -> Minecraft.getInstance().setScreen(this.parentScreen)));
+        });
+        clearButton.setTooltipText("gui.yes_steve_model.resource_station.clear_finished");
+        addRenderableWidget(clearButton);
+        IconButton cancelButton = new IconButton(left + 44, topY, 18, 18, 112, 64, b -> {
+            ModelUploadSession.failCurrent(Component.translatable("gui.yes_steve_model.resource_station.cancel_current"));
+        });
+        cancelButton.setTooltipText("gui.yes_steve_model.resource_station.cancel_current");
+        addRenderableWidget(cancelButton);
         int footerY = this.guiTop + this.guiHeight - 25;
-        addRenderableWidget(new FlatColorButton(this.guiLeft + Math.max(10, this.guiWidth / 2 - 60), footerY, 52, 16, Component.translatable("gui.yes_steve_model.pre_page"), b -> {
+        addRenderableWidget(new IconButton(this.guiLeft + 6, footerY, 18, 18, 0, 32, b -> Minecraft.getInstance().setScreen(this.parentScreen)));
+        addRenderableWidget(new FlatColorButton(this.guiLeft + 28, footerY, 18, 18, Component.literal("\u25C0"), b -> {
             if (this.page > 0) {
                 this.page--;
                 init();
             }
         }));
-        addRenderableWidget(new FlatColorButton(this.guiLeft + Math.min(this.guiWidth - 70, this.guiWidth / 2 + 16), footerY, 52, 16, Component.translatable("gui.yes_steve_model.next_page"), b -> {
+        addRenderableWidget(new FlatColorButton(this.guiLeft + 48, footerY, 18, 18, Component.literal("\u25B6"), b -> {
             int maxPage = maxPage(ResourceDownloadManager.snapshot().finishedTasks().size());
             if (this.page < maxPage) {
                 this.page++;
@@ -99,7 +97,8 @@ public class DownloadScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float partialTick) {
         extractTransparentBackground(extractor);
         ResourceDownloadManager.Snapshot snapshot = ResourceDownloadManager.snapshot();
-        extractor.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + this.guiWidth, this.guiTop + this.guiHeight, -14540254, -14540254);
+        extractor.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + this.guiWidth, this.guiTop + this.guiHeight, 0xE0202020, 0xE0202020);
+        extractor.fillGradient(this.guiLeft, this.guiTop, this.guiLeft + this.guiWidth, this.guiTop + 2, 0xFFB15D2B, 0xFFB15D2B);
         drawFirstLine(extractor, Component.translatable("gui.yes_steve_model.resource_station.download_page.title"), this.guiWidth - 24, this.guiLeft + 12, this.guiTop + (compactHeader() ? 53 : 31), 0xFFF3F3E0);
         renderUnfinishedTasks(extractor, snapshot);
         renderFinishedTasks(extractor, snapshot);

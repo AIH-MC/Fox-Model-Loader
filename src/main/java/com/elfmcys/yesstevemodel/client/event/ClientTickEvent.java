@@ -44,6 +44,8 @@ public final class ClientTickEvent {
         if (localPlayer != null) {
             PlayerCapability.get(localPlayer).ifPresent(cap -> cap.tickAnimations());
         }
+        // 在无模组服务器上，自动恢复之前持久化的模型选择
+        ClientModelManager.restorePersistedModelSelectionOnVanillaServer();
     }
 
     public static int getTickCount() {
