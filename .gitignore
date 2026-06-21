@@ -106,3 +106,17 @@ gradle-app.setting
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 
+# Build artifacts
+dist/
+*.jar
+!gradle-wrapper.jar
+
+# AI tool caches
+.architectury-transformer/
+.codegraph/
+
+# Debug / temp files
+*.javap.txt
+dep.txt
+level_javap.txt
+

@@ -57,15 +57,15 @@ public final class ResourceStationConfig {
         }
         int timeoutMs = parseInt(properties.getProperty("timeoutMs"), 6000);
         int maxDownloadBytes = parseInt(properties.getProperty("maxDownloadBytes"), 64 * 1024 * 1024);
-        boolean preferGithubAccelerator = Boolean.parseBoolean(properties.getProperty("preferGithubAccelerator", "false"));
+        boolean mainlandChinaMode = Boolean.parseBoolean(properties.getProperty("mainlandChinaMode", properties.getProperty("preferGithubAccelerator", "false")));
         List<String> githubAccelerators = parseList(properties.getProperty("githubAccelerators", ""));
         if (githubAccelerators.isEmpty()) {
             githubAccelerators.addAll(DEFAULT_GITHUB_ACCELERATORS);
         }
-        State state = new State(urls, selected, timeoutMs, maxDownloadBytes, preferGithubAccelerator, githubAccelerators);
+        State state = new State(urls, selected, timeoutMs, maxDownloadBytes, mainlandChinaMode, githubAccelerators);
         if (monitorLogEnabled()) {
-            YesSteveModel.LOGGER.info("[YSM-RESOURCE] Loaded config file={} selected={} urls={} timeoutMs={} maxDownloadBytes={} preferGithubAccelerator={} accelerators={}",
-                    FILE, state.selectedUrl(), state.urls().size(), state.timeoutMs(), state.maxDownloadBytes(), state.preferGithubAccelerator(), state.githubAccelerators().size());
+            YesSteveModel.LOGGER.info("[YSM-RESOURCE] Loaded config file={} selected={} urls={} timeoutMs={} maxDownloadBytes={} mainlandChinaMode={} accelerators={}",
+                    FILE, state.selectedUrl(), state.urls().size(), state.timeoutMs(), state.maxDownloadBytes(), state.mainlandChinaMode(), state.githubAccelerators().size());
         }
         return state;
     }
@@ -78,14 +78,14 @@ public final class ResourceStationConfig {
             properties.setProperty("selectedUrl", state.selectedUrl());
             properties.setProperty("timeoutMs", Integer.toString(state.timeoutMs()));
             properties.setProperty("maxDownloadBytes", Integer.toString(state.maxDownloadBytes()));
-            properties.setProperty("preferGithubAccelerator", Boolean.toString(state.preferGithubAccelerator()));
+            properties.setProperty("mainlandChinaMode", Boolean.toString(state.mainlandChinaMode()));
             properties.setProperty("githubAccelerators", String.join("|", state.githubAccelerators()));
             try (OutputStream out = Files.newOutputStream(FILE)) {
                 properties.store(out, "OpenYSM resource station");
             }
             if (monitorLogEnabled()) {
-                YesSteveModel.LOGGER.info("[YSM-RESOURCE] Saved config file={} selected={} urls={} timeoutMs={} maxDownloadBytes={} preferGithubAccelerator={} accelerators={}",
-                        FILE, state.selectedUrl(), state.urls().size(), state.timeoutMs(), state.maxDownloadBytes(), state.preferGithubAccelerator(), state.githubAccelerators().size());
+                YesSteveModel.LOGGER.info("[YSM-RESOURCE] Saved config file={} selected={} urls={} timeoutMs={} maxDownloadBytes={} mainlandChinaMode={} accelerators={}",
+                        FILE, state.selectedUrl(), state.urls().size(), state.timeoutMs(), state.maxDownloadBytes(), state.mainlandChinaMode(), state.githubAccelerators().size());
             }
         } catch (IOException e) {
             YesSteveModel.LOGGER.warn("[YSM] Failed to save resource station config", e);
@@ -134,6 +134,14 @@ public final class ResourceStationConfig {
     }
 
     public record State(List<String> urls, String selectedUrl, int timeoutMs, int maxDownloadBytes,
-                        boolean preferGithubAccelerator, List<String> githubAccelerators) {
+                        boolean mainlandChinaMode, List<String> githubAccelerators) {
+
+        public State withMainlandChinaMode(boolean mainlandChinaMode) {
+            return new State(this.urls, this.selectedUrl, this.timeoutMs, this.maxDownloadBytes, mainlandChinaMode, this.githubAccelerators);
+        }
+
+        public State withUrlsAndSelected(List<String> urls, String selectedUrl) {
+            return new State(urls, selectedUrl, this.timeoutMs, this.maxDownloadBytes, this.mainlandChinaMode, this.githubAccelerators);
+        }
     }
 }

@@ -23,6 +23,7 @@ import com.elfmcys.yesstevemodel.resource.YSMFolderDeserializer;
 import com.elfmcys.yesstevemodel.resource.models.ModelPackData;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.elfmcys.yesstevemodel.util.FileTypeUtil;
+import com.elfmcys.yesstevemodel.util.LocalModelSelectionStore;
 import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
 import com.elfmcys.yesstevemodel.util.NetworkOnlineDebugLog;
 import com.elfmcys.yesstevemodel.util.YSMThreadPool;
@@ -642,29 +643,106 @@ public class ClientModelManager {
         } else if (modelId != null && modelId.equals(selectedLocalOnlyModelId)) {
             clearSelectedLocalOnlyModel();
         }
+        // 持久化模型选择到本地文件，以便在无模组服务器上自动恢复
+        LocalModelSelectionStore.save(modelId, textureId);
     }
 
-    public static void restoreSelectedLocalOnlyModel() {
+    /**
+     * 恢复本地玩家之前选择的模型。
+     * <p>
+     * 优先从内存中恢复，如果内存中的选择在断开 YSM 服务器后可能已不可用，
+     * 则从本地文件恢复持久化的选择。
+     */
+    public static void restorePersistedModelSelection() {
+        // 1. 先尝试内存中的选择
         String modelId = selectedModelId;
         String textureId = selectedTextureId;
-        if (modelId == null || !isLocalOnlyModel(modelId)) {
+
+        // 2. 如果内存中的选择不是仅本地模型（在断开YSM服务器后可能已不可用），尝试从文件恢复
+        if (modelId == null || (!isLocalOnlyModel(modelId) && !modelAssemblyMap.containsKey(modelId))) {
+            Pair<String, String> persisted = LocalModelSelectionStore.load();
+            if (persisted != null) {
+                modelId = persisted.getLeft();
+                textureId = persisted.getRight();
+            }
+        }
+
+        // 3. 没有有效选择则跳过
+        if (modelId == null || modelId.equals("default") || modelId.isBlank()) {
             return;
         }
+
+        // 4. 模型必须仍在本地缓存中可用
+        if (!isLocalOnlyModel(modelId) && !modelAssemblyMap.containsKey(modelId)) {
+            return;
+        }
+
+        // 5. 拷贝为 final 变量供 lambda 使用
+        final String finalModelId = modelId;
+        final String finalTextureId = textureId;
+
+        // 6. 在渲染线程上应用
         ((Executor) Minecraft.getInstance()).execute(() -> {
-            if (!modelId.equals(selectedModelId) || !isLocalOnlyModel(modelId)) {
+            // 再次检查，防止在 execute 延迟期间选择已改变
+            if (!finalModelId.equals(selectedModelId) && !isLocalOnlyModel(finalModelId) && !modelAssemblyMap.containsKey(finalModelId)) {
+                // 内存中的选择已经变了，且持久化的模型也不再可用，放弃恢复
                 return;
             }
-            Minecraft minecraft = Minecraft.getInstance();
-            LocalPlayer player = minecraft.player;
+            LocalPlayer player = Minecraft.getInstance().player;
             if (player == null) {
                 return;
             }
             PlayerCapability.get(player).ifPresent(cap -> {
-                if (!modelId.equals(cap.getModelId())) {
-                    cap.initModelWithTexture(modelId, textureId);
+                if (!finalModelId.equals(cap.getModelId())) {
+                    cap.initModelWithTexture(finalModelId, finalTextureId);
                 }
             });
         });
+    }
+
+    /**
+     * 在无模组服务器（vanilla server）上，通过 tick 事件持续检测并恢复持久化的模型选择。
+     * <p>
+     * 当玩家加入 vanilla 服务器时，模型会被重置为 default。
+     * 此方法在每个 tick 中检查：如果当前模型是 default 且有持久化的选择，
+     * 则自动恢复之前的模型。
+     */
+    public static void restorePersistedModelSelectionOnVanillaServer() {
+        // 仅在无模组服务器上执行（YSM 连接未建立 = 服务器没有 YSM 模组）
+        if (NetworkHandler.isClientConnected()) {
+            return;
+        }
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null) {
+            return;
+        }
+        PlayerCapability.get(player).ifPresent(cap -> {
+            // 只在模型被重置为 default 时触发恢复
+            if (!"default".equals(cap.getModelId())) {
+                return;
+            }
+            Pair<String, String> persisted = LocalModelSelectionStore.load();
+            if (persisted == null) {
+                return;
+            }
+            String modelId = persisted.getLeft();
+            String textureId = persisted.getRight();
+            // 模型必须在本地缓存中可用
+            if (!isLocalOnlyModel(modelId) && !modelAssemblyMap.containsKey(modelId)) {
+                return;
+            }
+            cap.initModelWithTexture(modelId, textureId);
+            selectedModelId = modelId;
+            selectedTextureId = textureId;
+        });
+    }
+
+    /**
+     * @deprecated 使用 {@link #restorePersistedModelSelection()} 替代
+     */
+    @Deprecated
+    public static void restoreSelectedLocalOnlyModel() {
+        restorePersistedModelSelection();
     }
 
     public static void onUploadedModelAvailable(String modelId) {
@@ -774,7 +852,7 @@ public class ClientModelManager {
                 loadDirectoryModels(ServerModelManager.BUILT);
                 loadDirectoryModels(ServerModelManager.CUSTOM);
                 loadDirectoryModels(ServerModelManager.AUTH);
-                restoreSelectedLocalOnlyModel();
+                restorePersistedModelSelection();
             } catch (Exception e) {
                 YesSteveModel.LOGGER.error("[YSM] Failed to reload local model folders", e);
                 error = Component.translatable("gui.yes_steve_model.import.error.local_reload_failed", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());

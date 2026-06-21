@@ -187,8 +187,6 @@ public class ModelButton extends Button {
 
     public void renderTooltip(GuiGraphicsExtractor guiGraphics, Screen screen, int mouseX, int mouseY) {
         if (isHovered()) {
-            guiGraphics.pose().pushMatrix();
-            guiGraphics.pose().translate(0.0f, 0.0f);
             Minecraft minecraft = Minecraft.getInstance();
             String selected = minecraft.getLanguageManager().getSelected();
             if (!Objects.equals(this.cachedLanguage, selected)) {
@@ -209,7 +207,6 @@ public class ModelButton extends Button {
                 guiGraphics.setComponentTooltipForNextFrame(minecraft.font, this.tooltipLines, mouseX, mouseY);
 /*                 GuiGraphicsExtractor.renderComponentTooltip(Minecraft.getInstance().font, this.tooltipLines, mouseX, mouseY); */
             }
-            guiGraphics.pose().popMatrix();
         }
     }
 

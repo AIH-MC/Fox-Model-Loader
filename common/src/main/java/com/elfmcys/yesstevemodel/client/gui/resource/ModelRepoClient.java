@@ -178,8 +178,8 @@ public final class ModelRepoClient {
         Exception primaryError = null;
         if (path.branch().isBlank()) {
             path = path.withBranch(resolveDefaultBranch(path.owner(), path.repo(), config));
-            monitor(config, "GitHub initial branch owner={} repo={} branch={} preferAccelerator={}",
-                    path.owner(), path.repo(), path.branch(), config.preferGithubAccelerator());
+            monitor(config, "GitHub initial branch owner={} repo={} branch={} mainlandChinaMode={}",
+                    path.owner(), path.repo(), path.branch(), config.mainlandChinaMode());
         }
         primaryError = tryListGithubTree(path, config, entries, primaryError, "primary");
         if (entries.isEmpty()) {
@@ -420,7 +420,7 @@ public final class ModelRepoClient {
     private static JsonElement readGithubJson(String url, ResourceStationConfig.State config, int maxBytes) throws IOException {
         Exception last = null;
         List<String> candidates = githubApiCandidates(url, config);
-        monitor(config, "GitHub JSON start url={} candidates={} preferAccelerator={}", url, candidates.size(), config.preferGithubAccelerator());
+        monitor(config, "GitHub JSON start url={} candidates={} mainlandChinaMode={}", url, candidates.size(), config.mainlandChinaMode());
         for (String candidate : candidates) {
             try {
                 String json = new String(read(candidate, config.timeoutMs(), maxBytes, config, "github-json"), StandardCharsets.UTF_8);
@@ -443,7 +443,7 @@ public final class ModelRepoClient {
     private static byte[] readGithub(String url, ResourceStationConfig.State config, int maxBytes) throws IOException {
         IOException last = null;
         List<String> candidates = githubCandidates(url, config);
-        monitor(config, "GitHub read start url={} candidates={} preferAccelerator={}", url, candidates.size(), config.preferGithubAccelerator());
+        monitor(config, "GitHub read start url={} candidates={} mainlandChinaMode={}", url, candidates.size(), config.mainlandChinaMode());
         for (String candidate : candidates) {
             try {
                 byte[] data = read(candidate, config.timeoutMs(), maxBytes, config, "github-read");
@@ -567,7 +567,7 @@ public final class ModelRepoClient {
 
     private static List<String> githubCandidates(String url, ResourceStationConfig.State config) {
         Set<String> candidates = new LinkedHashSet<>();
-        if (!config.preferGithubAccelerator()) {
+        if (!config.mainlandChinaMode()) {
             candidates.add(url);
         }
         for (String prefix : config.githubAccelerators()) {
@@ -596,7 +596,7 @@ public final class ModelRepoClient {
         Set<String> candidates = new LinkedHashSet<>();
         if (entry.isGithubFile()) {
             String cdnUrl = "https://cdn.jsdelivr.net/gh/" + encPath(entry.githubOwner()) + "/" + encPath(entry.githubRepo()) + "@" + encPath(entry.githubBranch()) + "/" + encPath(entry.githubPath());
-            if (config.preferGithubAccelerator()) {
+            if (config.mainlandChinaMode()) {
                 candidates.add(cdnUrl);
                 candidates.addAll(githubCandidates(entry.url(), config));
             } else {

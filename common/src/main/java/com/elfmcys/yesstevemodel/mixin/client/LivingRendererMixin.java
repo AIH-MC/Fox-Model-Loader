@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.mixin.client;
 
+import com.elfmcys.yesstevemodel.client.renderer.ModelPreviewRenderer;
 import com.elfmcys.yesstevemodel.client.renderer.SubmitRenderContext;
 import com.elfmcys.yesstevemodel.geckolib3.extended.LivingEntityRendererAccessor;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -24,6 +25,13 @@ public abstract class LivingRendererMixin extends EntityRenderer<LivingEntity, E
     @Override
     @Unique
     public void tlm$renderNameTag(LivingEntity pEntity, float pEntityYaw, float pPartialTick, PoseStack pPoseStack, MultiBufferSource pBuffer, int pPackedLight) {
+        // Suppress name tags during GUI preview rendering (model selection tab, inventory preview, etc.)
+        // DummyPlayer entities have GameProfile names like "ysm_dab_404c_3..." which would appear
+        // as text on model heads if not suppressed. NeoForge's event patches handle this,
+        // but Fabric's vanilla shouldShowName may still return true for these entities.
+        if (ModelPreviewRenderer.isPreview()) {
+            return;
+        }
         double distSq = this.entityRenderDispatcher.distanceToSqr(pEntity);
         if (this.shouldShowName(pEntity, distSq)) {
             SubmitNodeCollector collector = SubmitRenderContext.get();

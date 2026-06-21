@@ -114,6 +114,31 @@ public final class ResourceDownloadManager {
         notifyListeners();
     }
 
+    public static void cancelCurrent() {
+        DownloadTask cancelledTask;
+        boolean cancelUpload;
+        synchronized (LOCK) {
+            if (currentTask == null) {
+                return;
+            }
+            cancelledTask = currentTask;
+            cancelUpload = cancelledTask.state == TaskState.UPLOADING;
+            currentTask.state = TaskState.CANCELLED;
+            currentTask.message = Component.translatable("gui.yes_steve_model.resource_station.cancelled");
+            status = currentTask.message;
+            statusColor = ChatFormatting.GRAY;
+            HISTORY.add(currentTask);
+            trimHistoryLocked();
+            currentTask = null;
+            downloadLoading = false;
+        }
+        if (cancelUpload) {
+            ModelUploadSession.failCurrent(Component.translatable("gui.yes_steve_model.resource_station.cancelled"));
+        }
+        notifyListeners();
+        processNextDownload();
+    }
+
     private static boolean enqueueLocked(ModelRepoEntry entry, ResourceStationConfig.State config) {
         if (isQueuedLocked(entry)) {
             return false;
@@ -418,7 +443,8 @@ public final class ResourceDownloadManager {
         IMPORTING,
         UPLOADING,
         DONE,
-        FAILED
+        FAILED,
+        CANCELLED
     }
 
     public record TaskSnapshot(String name, String fileName, TaskState state, float progress, Component message) {

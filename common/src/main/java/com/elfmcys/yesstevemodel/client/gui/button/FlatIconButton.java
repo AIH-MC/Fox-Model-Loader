@@ -4,6 +4,7 @@ import com.elfmcys.yesstevemodel.client.gui.ISpecialWidget;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -23,8 +24,15 @@ public class FlatIconButton extends AbstractWidget implements ISpecialWidget {
     @Override
     protected void extractWidgetRenderState(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float partialTick) {
         GuiGraphicsExtractor guiGraphics = extractor;
-        guiGraphics.fill(getX(), getY(), getX() + getWidth(), getY() + this.iconIndex, -280804798);
-/*         GuiGraphicsExtractor.renderScrollingString(Minecraft.getInstance().font, getMessage(), getX() + 2, getY(), getX() + getWidth() - 2, getY() + getHeight(), 16777215); */
+        Font font = Minecraft.getInstance().font;
+        guiGraphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), -280804798);
+        Component message = getMessage();
+        int textWidth = font.width(message);
+        int textX = textWidth <= getWidth() - 4 ? getX() + (getWidth() - textWidth) / 2 : getX() + 2;
+        int textY = getY() + (getHeight() - 8) / 2;
+        guiGraphics.enableScissor(getX() + 2, getY(), getX() + getWidth() - 2, getY() + getHeight());
+        guiGraphics.text(font, message, textX, textY, 16777215, true);
+        guiGraphics.disableScissor();
     }
 
     public void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
