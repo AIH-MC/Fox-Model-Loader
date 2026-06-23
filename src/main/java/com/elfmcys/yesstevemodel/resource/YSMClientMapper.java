@@ -184,6 +184,13 @@ public class YSMClientMapper {
             if (imageFormat == 0) {
                 imageFormat = 1;
             }
+        } else if (imageFormat > 0) {
+            // 部分作者会把 WebP/AVIF/JPEG 字节套上 .png 后缀，并在打包时把 imageFormat 写成 2(PNG)。
+            // 这里按字节真签名复核一次：检测出非零、且与声明不符时，以字节真相为准，避免把 WebP 字节喂给 ImageIO PNG 解码导致返回 null → fallbackData → NativeImage.read 失败 → 一片黑。
+            int detected = YSMFolderDeserializer.detectFormat(data);
+            if (detected != 0 && detected != imageFormat) {
+                imageFormat = detected;
+            }
         }
 
         try {
@@ -230,8 +237,19 @@ public class YSMClientMapper {
         return fallbackData;
     }
 
+    /**
+     * 判断字节流是否真的是 PNG（以 89 50 4E 47 开头）。
+     * 部分模型作者会把 WebP/AVIF/JPEG 字节直接写进 .png 文件并把 imageFormat 标成 2(PNG)，
+     * 用本方法做一次真签名校验，避免把非 PNG 字节当 PNG 透传给下游 NativeImage 导致渲染失败。
+     */
+    private static boolean isRealPng(byte[] data) {
+        return data != null && data.length >= 8
+                && data[0] == (byte) 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G';
+    }
+
     public static byte[] toPng(byte[] data, int imageFormat, int width, int height) {
-        if (imageFormat == 2) {
+        // 若声明的是 PNG 但字节实际不是 PNG（如打了 .png 后缀的 WebP），不能直接当 PNG 返回，否则下游 NativeImage 解不出来。
+        if (imageFormat == 2 && isRealPng(data)) {
             return data;
         }
         BufferedImage img = decodeToImage(data, imageFormat, width, height);
@@ -248,7 +266,7 @@ public class YSMClientMapper {
             BufferedImage img = decodeToImage(rt.data, rt.imageFormat, rt.width, rt.height);
             imagesList.add(img);
 
-            byte[] processedData = (rt.imageFormat == 2) ? rt.data : encodeToPng(img, rt.data);
+            byte[] processedData = (rt.imageFormat == 2 && isRealPng(rt.data)) ? rt.data : encodeToPng(img, rt.data);
             OuterFileTexture tex = new OuterFileTexture(processedData);
 
             Map<ShadersTextureType, OuterFileTexture> suffixTextures = new LinkedHashMap<>();
@@ -747,7 +765,7 @@ public class YSMClientMapper {
             for(RawYsmModel.RawTexture rt : sub.textures.values()) {
                 BufferedImage img = decodeToImage(rt.data, rt.imageFormat, rt.width, rt.height);
                 imgList.add(img);
-                byte[] processedData = (rt.imageFormat == 2) ? rt.data : encodeToPng(img, rt.data);
+                byte[] processedData = (rt.imageFormat == 2 && isRealPng(rt.data)) ? rt.data : encodeToPng(img, rt.data);
                 if (texture == null) {
                     texture = new OuterFileTexture(processedData);
                 }
@@ -789,7 +807,7 @@ public class YSMClientMapper {
             for(RawYsmModel.RawTexture rt : sub.textures.values()) {
                 BufferedImage img = decodeToImage(rt.data, rt.imageFormat, rt.width, rt.height);
                 imgList.add(img);
-                byte[] processedData = (rt.imageFormat == 2) ? rt.data : encodeToPng(img, rt.data);
+                byte[] processedData = (rt.imageFormat == 2 && isRealPng(rt.data)) ? rt.data : encodeToPng(img, rt.data);
                 if (texture == null) {
                     texture = new OuterFileTexture(processedData);
                 }

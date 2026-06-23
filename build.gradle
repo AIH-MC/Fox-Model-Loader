@@ -118,12 +118,34 @@ processResources {
     }
 }
 
+// 把 ImageStream 的类直接打进最终 jar（不走 jarJar，避免 flatDir + jarJar 兼容问题）
+configurations {
+    bundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
 dependencies {
     jarJar(implementation("com.github.luben:zstd-jni")) {
         version {
             prefer zstd_jni_version
         }
     }
+
+    // ImageStream 提供 WebP / AVIF 解码（rip.ysm.imagestream.*）。
+    // 部分模型作者会把 WebP 字节直接写进 .png 文件并把 imageFormat 标成 2(PNG)，
+    // YSMClientMapper 探测到真签名后会改走 WebpDecoder，本依赖必须存在。
+    compileOnly files('libs/ImageStream--SNAPSHOT.jar')
+    bundle files('libs/ImageStream--SNAPSHOT.jar')
+}
+
+tasks.named('jar').configure {
+    from(configurations.bundle.collect { it.isDirectory() ? it : zipTree(it) }) {
+        exclude 'META-INF/MANIFEST.MF'
+        exclude 'META-INF/maven/**'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.register("printRepositories") {
