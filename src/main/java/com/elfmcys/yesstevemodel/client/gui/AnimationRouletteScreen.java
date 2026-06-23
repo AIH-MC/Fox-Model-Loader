@@ -671,8 +671,12 @@ public class AnimationRouletteScreen extends Screen {
     }
 
     private void renderKeyBindings(GuiGraphics guiGraphics, int slotIndex, int x, int y) {
+        List<KeyMapping> keyMappings = ExtraAnimationKey.getKeyMappings();
+        if (slotIndex < 0 || slotIndex >= keyMappings.size()) {
+            return;
+        }
         MutableComponent mutableComponentWithStyle = Component.literal("[ ").withStyle(ChatFormatting.YELLOW);
-        KeyMapping keyMapping = ExtraAnimationKey.getKeyMappings().get(slotIndex);
+        KeyMapping keyMapping = keyMappings.get(slotIndex);
         if (keyMapping.isUnbound()) {
             mutableComponentWithStyle.append(Component.translatable("key.yes_steve_model.extra_animation.none"));
         } else {
