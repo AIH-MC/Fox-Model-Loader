@@ -6,12 +6,14 @@ import com.elfmcys.yesstevemodel.client.renderer.AnimationDebugOverlay;
 import com.elfmcys.yesstevemodel.client.renderer.ExtraPlayerOverlay;
 import com.elfmcys.yesstevemodel.client.renderer.ModelSyncStateOverlay;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.resources.Identifier;
 import rip.ysm.api.client.HudOverlay;
+import rip.ysm.architectury.registry.client.keymappings.KeyMappingRegistry;
 
 public final class YesSteveModelFabricClient implements ClientModInitializer {
     @Override
@@ -31,5 +33,8 @@ public final class YesSteveModelFabricClient implements ClientModInitializer {
         });
 
         ClientModelManager.loadDefaultModel();
+        ClientModelManager.reloadLocalModels(null);
+
+        KeyMappingRegistry.getCustomKeyMappings().forEach(KeyMappingHelper::registerKeyMapping);
     }
 }
