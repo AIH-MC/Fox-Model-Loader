@@ -35,7 +35,7 @@ dependencies {
 //    modImplementation fabricApi.module("fabric-sound-api-v1", rootProject.fabric_api_version)
     // fabric-key-binding-api-v1 not compatible with custom Mojang mappings
 
-    implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
 
     modImplementation "maven.modrinth:forge-config-api-port:$rootProject.forge_config_api_port_version"
     include "maven.modrinth:forge-config-api-port:$rootProject.forge_config_api_port_version"
@@ -44,6 +44,9 @@ dependencies {
     modImplementation "org.ladysnake.cardinal-components-api:cardinal-components-entity:$rootProject.cardinal_components_version"
     include "org.ladysnake.cardinal-components-api:cardinal-components-base:$rootProject.cardinal_components_version"
     include "org.ladysnake.cardinal-components-api:cardinal-components-entity:$rootProject.cardinal_components_version"
+
+    implementation "com.electronwill.night-config:core:3.9.0"
+    implementation "com.electronwill.night-config:toml:3.9.0"
 
     modCompileOnly "com.terraformersmc:modmenu:$rootProject.modmenu_version"
 
