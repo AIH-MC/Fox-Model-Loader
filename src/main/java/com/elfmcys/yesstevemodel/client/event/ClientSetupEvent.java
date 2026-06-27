@@ -2,6 +2,7 @@ package com.elfmcys.yesstevemodel.client.event;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.client.animation.AnimationRegister;
+import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.client.input.AnimationRouletteKey;
 import com.elfmcys.yesstevemodel.client.input.DebugAnimationKey;
 import com.elfmcys.yesstevemodel.client.input.ExtraAnimationKey;
@@ -30,6 +31,8 @@ public final class ClientSetupEvent {
                 return;
             }
             checkNativeInitialization();
+            ClientModelManager.loadDefaultModel();
+            ClientModelManager.reloadLocalModels(null);
         });
     }
 

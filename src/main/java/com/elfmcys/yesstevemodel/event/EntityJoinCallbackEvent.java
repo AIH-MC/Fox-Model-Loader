@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 
 public class EntityJoinCallbackEvent {
 
-    private static final Cache<Integer, List<Consumer<Entity>>> callbackCache = CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.SECONDS).build();
+    private static final Cache<Integer, List<Consumer<Entity>>> callbackCache = CacheBuilder.newBuilder().expireAfterAccess(5, TimeUnit.MINUTES).build();
 
     private EntityJoinCallbackEvent() {
     }

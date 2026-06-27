@@ -2,8 +2,6 @@ package com.elfmcys.yesstevemodel.network;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.network.message.*;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.resources.Identifier;
@@ -16,6 +14,7 @@ import rip.ysm.api.network.YSMChannel;
 
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.BooleanSupplier;
 
 public final class NetworkHandler {
 
@@ -26,6 +25,26 @@ public final class NetworkHandler {
     private static final Map<Connection, String> CHANNEL_VERSIONS = new WeakHashMap<>();
 
     private static volatile boolean clientHandshakeComplete = false;
+
+    /**
+     * Client-side delegate that checks whether the local player has an active
+     * connection to a server.  Registered by the client bootstrap so that this
+     * class never holds a direct reference to {@code net.minecraft.client.*}
+     * classes — those classes do not exist on a dedicated server and would
+     * cause a {@link NoClassDefFoundError} the moment this class is loaded.
+     *
+     * <p>Defaults to {@code () -> false} (safe no-op on a dedicated server).
+     */
+    private static BooleanSupplier clientConnectionChecker = () -> false;
+
+    /**
+     * Called once from the client-side bootstrap to wire in the real
+     * {@code Minecraft}/{@code ClientPacketListener} check without polluting
+     * this class's constant pool with client-only symbols.
+     */
+    public static void setClientConnectionChecker(BooleanSupplier checker) {
+        clientConnectionChecker = checker;
+    }
 
     public static boolean setChannelVersion(Connection connection, String str) {
         if (connection == null || str == null) {
@@ -52,11 +71,9 @@ public final class NetworkHandler {
         if (clientHandshakeComplete) {
             return true;
         }
-        ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        if (connection == null) {
-            return false;
-        }
-        return connection.getConnection() != null;
+        // Delegate to the client-side checker registered at startup.
+        // On a dedicated server the default no-op returns false.
+        return clientConnectionChecker.getAsBoolean();
     }
 
     public static boolean isConnectionValid(@Nullable Connection connection) {

@@ -1,16 +1,14 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.capability.PlayerCapability;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import rip.ysm.api.network.PacketContext;
 
 public class S2CSyncAnimationExpressionPacket {
 
-    private final int entityId;
+    final int entityId;
 
-    private final FloatArrayList floatData;
+    final FloatArrayList floatData;
 
     public S2CSyncAnimationExpressionPacket(int entityId, FloatArrayList floatData) {
         this.entityId = entityId;
@@ -37,9 +35,7 @@ public class S2CSyncAnimationExpressionPacket {
 
     public static void handleCapability(S2CSyncAnimationExpressionPacket message, PacketContext ctx) {
         if (ctx.isClientSide()) {
-            ctx.enqueueWork(() -> {
-                PlayerCapability.get(Minecraft.getInstance().level.getEntity(message.entityId)).ifPresent(cap -> cap.executeAnimationExpression(message.floatData));
-            });
+            ctx.enqueueWork(() -> ClientPacketHandler.handleSyncAnimationExpression(message));
         }
     }
 }

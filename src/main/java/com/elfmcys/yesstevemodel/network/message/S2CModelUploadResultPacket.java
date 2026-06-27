@@ -1,6 +1,5 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.client.upload.ModelUploadSession;
 import net.minecraft.network.FriendlyByteBuf;
 import rip.ysm.api.network.PacketContext;
 
@@ -20,10 +19,7 @@ public record S2CModelUploadResultPacket(long uploadId, byte status, String mode
 
     public static void handle(S2CModelUploadResultPacket packet, PacketContext ctx) {
         if (ctx.isClientSide()) {
-            ctx.enqueueWork(() -> handleOnClient(packet));
+            ctx.enqueueWork(() -> ClientPacketHandler.handleModelUploadResult(packet));
         }
-    }
-    private static void handleOnClient(S2CModelUploadResultPacket packet) {
-        ModelUploadSession.onResult(packet.uploadId, packet.status, packet.modelId, packet.h1, packet.h2, packet.message);
     }
 }

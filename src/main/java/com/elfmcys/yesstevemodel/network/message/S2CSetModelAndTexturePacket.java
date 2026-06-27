@@ -1,25 +1,20 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.capability.PlayerCapability;
-import com.elfmcys.yesstevemodel.client.ClientModelManager;
-import com.elfmcys.yesstevemodel.event.EntityJoinCallbackEvent;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.entity.Entity;
 import rip.ysm.api.network.PacketContext;
+import com.elfmcys.yesstevemodel.event.EntityJoinCallbackEvent;
 
 public class S2CSetModelAndTexturePacket {
 
-    private final int entityId;
+    final int entityId;
 
-    private final String modelId;
+    final String modelId;
 
-    private final String textureId;
+    final String textureId;
 
-    private final boolean disabled;
+    final boolean disabled;
 
-    private final S2CSyncPlayerStatePacket entityModelSync;
+    final S2CSyncPlayerStatePacket entityModelSync;
 
     public S2CSetModelAndTexturePacket(int entityId, String modelId, String textureId, boolean disabled, S2CSyncPlayerStatePacket playerState) {
         this.entityId = entityId;
@@ -43,18 +38,7 @@ public class S2CSetModelAndTexturePacket {
 
     public static void handle(S2CSetModelAndTexturePacket other, PacketContext ctx) {
         if (ctx.isClientSide()) {
-            EntityJoinCallbackEvent.addCallback(other.entityId, entity -> applyOnClient(entity, other));
+            EntityJoinCallbackEvent.addCallback(other.entityId, entity -> ClientPacketHandler.handleSetModelAndTexture(entity, other));
         }
-    }
-    public static void applyOnClient(Entity entity, S2CSetModelAndTexturePacket other) {
-        PlayerCapability.get(entity).ifPresent(cap -> {
-            LocalPlayer localPlayer = Minecraft.getInstance().player;
-            boolean keepLocalOnlyModel = entity == localPlayer && ClientModelManager.isSelectedLocalOnlyModel(cap.getModelId());
-            if (!keepLocalOnlyModel) {
-                cap.initModelWithTexture(other.modelId, other.textureId);
-            }
-            cap.setForceDisabled(other.disabled);
-            S2CSyncPlayerStatePacket.handleCapability(entity, other.entityModelSync);
-        });
     }
 }

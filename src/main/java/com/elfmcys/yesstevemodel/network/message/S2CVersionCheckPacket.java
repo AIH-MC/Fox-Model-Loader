@@ -1,6 +1,5 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import com.elfmcys.yesstevemodel.model.ServerModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import net.minecraft.network.FriendlyByteBuf;
@@ -8,9 +7,9 @@ import rip.ysm.api.network.PacketContext;
 
 public class S2CVersionCheckPacket {
 
-    private final String version;
-    private final boolean oysmServer;
-    private final boolean allowUpload;
+    final String version;
+    final boolean oysmServer;
+    final boolean allowUpload;
 
     public S2CVersionCheckPacket() {
         this(NetworkHandler.VERSION, true, ServerModelManager.isModelUploadAllowed());
@@ -57,16 +56,6 @@ public class S2CVersionCheckPacket {
     }
 
     public static void handle(S2CVersionCheckPacket message, PacketContext ctx) {
-        ctx.enqueueWork(() -> {
-            ClientModelManager.setOysmServer(message.oysmServer);
-            ClientModelManager.setAllowUpload(message.allowUpload);
-        });
-        if (NetworkHandler.setChannelVersion(ctx.getConnection(), message.version)) {
-            ctx.enqueueWork(ClientModelManager::onSyncConnected);
-        }
-        if (NetworkHandler.VERSION.equals(message.version)) {
-            NetworkHandler.markClientHandshakeComplete();
-        }
-        ctx.enqueueWork(() -> NetworkHandler.sendToServer(new C2SVersionCheckPacket()));
+        ClientPacketHandler.handleVersionCheck(message, ctx);
     }
 }

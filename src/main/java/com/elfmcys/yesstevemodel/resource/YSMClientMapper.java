@@ -646,7 +646,8 @@ public class YSMClientMapper {
             }
             buttonsList.add(new ExtraAnimationButtons(rBtn.id, rBtn.name, rBtn.description, metaList.toArray(new AbstractConfig[0])));
         }
-        ModelProperties properties = new ModelProperties(rp.heightScale, rp.widthScale, rp.defaultTexture, rp.previewAnimation, new OrderedStringMap<>(new Object2ObjectArrayMap<>(rp.extraAnimations)), buttonsList.toArray(new ExtraAnimationButtons[0]), classifyList.toArray(new StringMapPair[0]), rp.isFree, rp.renderLayersFirst, rp.disablePreviewRotation);
+        String defaultTexture = resolveDefaultTexture(raw);
+        ModelProperties properties = new ModelProperties(rp.heightScale, rp.widthScale, defaultTexture, rp.previewAnimation, new OrderedStringMap<>(new Object2ObjectArrayMap<>(rp.extraAnimations)), buttonsList.toArray(new ExtraAnimationButtons[0]), classifyList.toArray(new StringMapPair[0]), rp.isFree, rp.renderLayersFirst, rp.disablePreviewRotation);
 
         int bones = 0;
         int cubes = 0;
@@ -669,6 +670,16 @@ public class YSMClientMapper {
                 footer.version,
                 rp.sha256 != null ? rp.sha256 : "",
                 footer.extra, footer.time, footer.rand);
+    }
+
+    private static String resolveDefaultTexture(RawYsmModel raw) {
+        String defaultTexture = raw.properties.defaultTexture;
+        if (raw.mainEntity.textures.isEmpty()) {
+            return defaultTexture;
+        }
+        return defaultTexture != null && !defaultTexture.isBlank() && raw.mainEntity.textures.containsKey(defaultTexture)
+                ? defaultTexture
+                : raw.mainEntity.textures.keySet().iterator().next();
     }
 
     private static ModelExtraResourcesFile buildExtraResources(RawYsmModel raw) {

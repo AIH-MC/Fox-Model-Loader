@@ -12,6 +12,7 @@ public class PlayerEvent {
     public static final Event<Consumer<ServerPlayer>> PLAYER_QUIT = new Event<>();
     public static final Event<Consumer<ServerPlayer>> PLAYER_JOIN = new Event<>();
     public static final Event<PlayerClone> PLAYER_CLONE = new Event<>();
+    public static final Event<Consumer<ServerPlayer>> PLAYER_CHANGED_DIMENSION = new Event<>();
 
     public static void fireJoin(ServerPlayer player) {
         PLAYER_JOIN.fire(handler -> handler.accept(player));
@@ -19,6 +20,10 @@ public class PlayerEvent {
 
     public static void fireQuit(ServerPlayer player) {
         PLAYER_QUIT.fire(handler -> handler.accept(player));
+    }
+
+    public static void fireChangedDimension(ServerPlayer player) {
+        PLAYER_CHANGED_DIMENSION.fire(handler -> handler.accept(player));
     }
 
     public static void fireClone(ServerPlayer oldPlayer, ServerPlayer newPlayer, boolean wasDeath) {

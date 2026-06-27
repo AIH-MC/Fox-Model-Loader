@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.texture;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.config.GeneralConfig;
 import com.elfmcys.yesstevemodel.util.ModelMemoryProfiler;
 import rip.ysm.compat.oculus.ShadersTextureType;
 import com.mojang.blaze3d.platform.NativeImage;
@@ -25,6 +26,7 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
     private Map<ShadersTextureType, OuterFileTexture> suffixTextures = Reference2ReferenceMaps.emptyMap();
 
     private boolean uploaded;
+    private boolean closed;
 
     public OuterFileTexture(byte[] data) {
         this.data = data;
@@ -86,6 +88,10 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
             this.textureView = device.createTextureView(this.texture);
             device.createCommandEncoder().writeToTexture(this.texture, image);
             this.uploaded = true;
+            if (GeneralConfig.safeGet(GeneralConfig.RELEASE_TEXTURE_BYTES_AFTER_UPLOAD, false) && this.data != null) {
+                this.data = null;
+                ModelMemoryProfiler.log("texture-bytes-released", null);
+            }
             ModelMemoryProfiler.log("texture-uploaded", null);
         }
     }
@@ -102,5 +108,22 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
 
     public Map<ShadersTextureType, ? extends AbstractTexture> getSuffixTextures() {
         return this.suffixTextures;
+    }
+
+    @Override
+    public void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        for (OuterFileTexture texture : this.suffixTextures.values()) {
+            if (texture != null) {
+                texture.close();
+            }
+        }
+        this.suffixTextures = Reference2ReferenceMaps.emptyMap();
+        this.data = null;
+        super.close();
+        this.uploaded = false;
     }
 }

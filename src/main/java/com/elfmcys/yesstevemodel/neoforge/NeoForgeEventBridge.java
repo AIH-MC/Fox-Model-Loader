@@ -71,6 +71,13 @@ public final class NeoForgeEventBridge {
     }
 
     @SubscribeEvent
+    public static void onPlayerChangedDimension(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            PlayerEvent.fireChangedDimension(player);
+        }
+    }
+
+    @SubscribeEvent
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
         EventResult result = EntityEvent.fireAdd(event.getEntity(), event.getLevel());
         if (result.isFalse()) {

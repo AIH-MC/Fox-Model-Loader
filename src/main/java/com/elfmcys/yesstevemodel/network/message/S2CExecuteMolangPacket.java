@@ -1,21 +1,13 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.YesSteveModel;
-import com.elfmcys.yesstevemodel.capability.PlayerCapability;
-import rip.ysm.compat.touhoulittlemaid.TouhouMaidCompat;
-import com.elfmcys.yesstevemodel.geckolib3.resource.GeckoLibCache;
-import com.elfmcys.yesstevemodel.molang.parser.ParseException;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import rip.ysm.api.network.PacketContext;
 
 public class S2CExecuteMolangPacket {
 
-    private final int[] entityIds;
+    final int[] entityIds;
 
-    private final String expression;
+    final String expression;
 
     public S2CExecuteMolangPacket(int entityIds, String expression) {
         this.entityIds = new int[]{entityIds};
@@ -38,27 +30,7 @@ public class S2CExecuteMolangPacket {
 
     public static void handle(S2CExecuteMolangPacket message, PacketContext ctx) {
         if (ctx.isClientSide()) {
-            ctx.enqueueWork(() -> handleCapability(message));
-        }
-    }
-    public static void handleCapability(S2CExecuteMolangPacket message) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return;
-        }
-        for (int i : message.entityIds) {
-            Entity entity = minecraft.level.getEntity(i);
-            if (entity instanceof Player) {
-                PlayerCapability.get(entity).ifPresent(cap -> {
-                    try {
-                        cap.executeExpression(GeckoLibCache.parseSimpleExpression(message.expression), true, false, null);
-                    } catch (ParseException e) {
-                        YesSteveModel.LOGGER.error("Failed to execute molang " + message.expression, e);
-                    }
-                });
-            } else if (TouhouMaidCompat.isMaidEntity(entity)) {
-                TouhouMaidCompat.playMaidAnimation(entity, message.expression);
-            }
+            ctx.enqueueWork(() -> ClientPacketHandler.handleExecuteMolang(message));
         }
     }
 }
