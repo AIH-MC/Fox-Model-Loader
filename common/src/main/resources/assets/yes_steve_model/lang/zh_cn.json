@@ -649,6 +649,7 @@
   "gui.yes_steve_model.url.donate": "赞助",
   "gui.yes_steve_model.url.home": "主页",
   "key.category.yes_steve_model": "Fox Model Loader",
+  "key.category.yes_steve_model.keys": "Fox Model Loader",
   "key.yes_steve_model.animation_roulette.desc": "打开轮盘动画",
   "key.yes_steve_model.debug_animation.desc": "打开动画调试",
   "key.yes_steve_model.extra_animation.0.desc": "播放额外动画 0",

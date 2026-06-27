@@ -68,4 +68,17 @@ public class OuterFileTexture extends AbstractTexture implements ITextureMap {
     public Map<ShadersTextureType, ? extends AbstractTexture> getSuffixTextures() {
         return this.suffixTextures;
     }
+
+    @Override
+    public void close() {
+        for (OuterFileTexture texture : this.suffixTextures.values()) {
+            if (texture != null) {
+                texture.close();
+            }
+        }
+        this.suffixTextures = Reference2ReferenceMaps.emptyMap();
+        this.data = null;
+        super.close();
+        this.uploaded = false;
+    }
 }

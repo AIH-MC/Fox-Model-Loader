@@ -649,6 +649,7 @@
   "gui.yes_steve_model.url.donate": "Bağış",
   "gui.yes_steve_model.url.home": "Ana Sayfa",
   "key.category.yes_steve_model": "Fox Model Loader",
+  "key.category.yes_steve_model.keys": "Fox Model Loader",
   "key.yes_steve_model.animation_roulette.desc": "Open Animation Roulette",
   "key.yes_steve_model.debug_animation.desc": "Open Animation Debug",
   "key.yes_steve_model.extra_animation.0.desc": "Play Extra Animation 0",

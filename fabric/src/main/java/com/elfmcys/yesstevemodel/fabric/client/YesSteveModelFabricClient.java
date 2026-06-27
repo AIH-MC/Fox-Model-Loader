@@ -26,5 +26,6 @@ public final class YesSteveModelFabricClient implements ClientModInitializer {
         });
 
         ClientModelManager.loadDefaultModel();
+        ClientModelManager.reloadLocalModels(null);
     }
 }

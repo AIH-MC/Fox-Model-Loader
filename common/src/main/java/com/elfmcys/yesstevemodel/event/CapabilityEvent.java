@@ -47,6 +47,7 @@ public final class CapabilityEvent {
         PlayerEvent.PLAYER_QUIT.register(CapabilityEvent::onPlayerQuit);
         EntityEvent.ADD.register(CapabilityEvent::onEntityAdd);
         TickEvent.SERVER_POST.register(CapabilityEvent::onServerTick);
+        PlayerEvent.CHANGE_DIMENSION.register((player, from, to) -> onPlayerChangedDimension(player));
     }
 
     private static void onPlayerCloned(ServerPlayer oldPlayer, ServerPlayer newPlayer, boolean wasDeath) {
@@ -83,6 +84,33 @@ public final class CapabilityEvent {
 
     public static void forgetSyncedModelStates(ServerPlayer receiver) {
         SYNCED_PLAYER_MODEL_STATES.remove(receiver.getUUID());
+    }
+
+    /**
+     * Called when a player travels through a portal and changes dimension.
+     * The traveling player's client tears down and rebuilds its entire world,
+     * so all model sync state for that player becomes stale.
+     * We clear caches in both directions and force a full re-sync.
+     */
+    private static void onPlayerChangedDimension(ServerPlayer traveler) {
+        if (!YesSteveModel.isAvailable()) return;
+        MinecraftServer server = traveler.serverLevel().getServer();
+        if (server == null) return;
+        UUID travelerId = traveler.getUUID();
+        // 1. Clear ALL model states cached for traveler as receiver — their client rebuilt its world.
+        SYNCED_PLAYER_MODEL_STATES.remove(travelerId);
+        // 2. Clear traveler as source from every other receiver — force re-send of traveler's model to all.
+        SYNCED_PLAYER_MODEL_STATES.values().forEach(m -> m.remove(travelerId));
+        // 3. Re-send every connected player's model to the traveler.
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (p == traveler) continue;
+            getModelInfoCap(p).ifPresent(c -> {
+                if (!canSyncModel(p, c)) return;
+                c.createSyncMessage(p, false).ifPresent(m -> NetworkHandler.sendToClientPlayer(m, traveler));
+            });
+        }
+        // 4. Mark traveler's own model dirty so it gets re-sent to all others on the next tick.
+        getModelInfoCap(traveler).ifPresent(ModelInfoCapability::markDirty);
     }
 
     private static EventResult onEntityAdd(Entity entity, Level level) {
