@@ -354,6 +354,8 @@ public class YSMFolderDeserializer implements AutoCloseable {
             }
         }
 
+        normalizeDefaultTexture();
+
         if (playerObj.has("animation") && playerObj.get("animation").isJsonObject()) {
             JsonObject animObj = playerObj.getAsJsonObject("animation");
             for (Map.Entry<String, JsonElement> entry : animObj.entrySet()) {
@@ -932,6 +934,14 @@ public class YSMFolderDeserializer implements AutoCloseable {
         }
     }
 
+
+    private void normalizeDefaultTexture() {
+        if (model.mainEntity.textures.isEmpty()) return;
+        String defaultTexture = model.properties.defaultTexture;
+        if (defaultTexture == null || defaultTexture.isBlank() || !model.mainEntity.textures.containsKey(defaultTexture)) {
+            model.properties.defaultTexture = model.mainEntity.textures.keySet().iterator().next();
+        }
+    }
 
     private record ImageMeta(int width, int height, int format) {}
 

@@ -1,6 +1,7 @@
 package rip.ysm.architectury.event.events.common;
 
 import rip.ysm.architectury.event.Event;
+import net.fabricmc.fabric.api.entity.event.v1.ServerEntityLevelChangeEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -13,12 +14,15 @@ public class PlayerEvent {
     public static final Event<Consumer<ServerPlayer>> PLAYER_QUIT = new Event<>();
     public static final Event<Consumer<ServerPlayer>> PLAYER_JOIN = new Event<>();
     public static final Event<PlayerClone> PLAYER_CLONE = new Event<>();
+    public static final Event<Consumer<ServerPlayer>> PLAYER_CHANGED_DIMENSION = new Event<>();
 
     static {
         ServerPlayerEvents.JOIN.register(player -> PLAYER_JOIN.fire(handler -> handler.accept(player)));
         ServerPlayerEvents.LEAVE.register(player -> PLAYER_QUIT.fire(handler -> handler.accept(player)));
         ServerPlayerEvents.COPY_FROM.register((oldPlayer, newPlayer, alive) ->
                 PLAYER_CLONE.fire(handler -> handler.clone(oldPlayer, newPlayer, !alive)));
+        ServerEntityLevelChangeEvents.AFTER_PLAYER_CHANGE_LEVEL.register((player, origin, destination) ->
+                PLAYER_CHANGED_DIMENSION.fire(handler -> handler.accept(player)));
     }
 
     @FunctionalInterface
