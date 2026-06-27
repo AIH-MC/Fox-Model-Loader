@@ -6,9 +6,9 @@ import com.elfmcys.yesstevemodel.mixin.ServerCommonPacketListenerImplAccessor;
 import com.elfmcys.yesstevemodel.network.message.*;
 import io.netty.channel.Channel;
 import io.netty.util.AttributeKey;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.Connection;
+
+import java.util.function.BooleanSupplier;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,6 +27,8 @@ public final class NetworkHandler {
     private static final AttributeKey<String> CHANNEL_VERSION_KEY = AttributeKey.valueOf("yes_steve_model_channel_version");
 
     private static volatile boolean clientHandshakeComplete = false;
+
+    public static BooleanSupplier clientConnectionChecker = () -> false;
 
     public static boolean setChannelVersion(Connection connection, String str) {
         return ((ConnectionAccessor) connection).ysm$getChannel().attr(CHANNEL_VERSION_KEY).compareAndSet(null, str);
@@ -48,11 +50,7 @@ public final class NetworkHandler {
         if (clientHandshakeComplete) {
             return true;
         }
-        ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        if (connection == null) {
-            return false;
-        }
-        return isConnectionValid(connection.getConnection());
+        return clientConnectionChecker.getAsBoolean();
     }
 
     public static boolean isConnectionValid(@Nullable Connection connection) {

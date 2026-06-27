@@ -19,7 +19,6 @@ public final class ClientSetupEvent {
     @SubscribeEvent public static void onSetup(FMLClientSetupEvent event) { if (YesSteveModel.isAvailable()) AnimationRegister.registerAnimationState(); }
     @SubscribeEvent public static void onKeys(RegisterKeyMappingsEvent event) {
         event.register(PlayerModelToggleKey.KEY_MAPPING);
-        if (!YesSteveModel.isAvailable()) return;
         event.register(AnimationRouletteKey.KEY_ROULETTE); event.register(AnimationRouletteKey.KEY_LOCK);
         event.register(DebugAnimationKey.KEY_MAPPING); event.register(ExtraPlayerRenderKey.KEY_MAPPING);
         for (KeyMapping m : ExtraAnimationKey.getKeyMappings()) event.register(m);

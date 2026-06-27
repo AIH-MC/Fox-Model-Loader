@@ -13,7 +13,7 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 public class EntityJoinCallbackEvent {
-    private static final Cache<Integer, List<Consumer<Entity>>> cache = CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.SECONDS).build();
+    private static final Cache<Integer, List<Consumer<Entity>>> cache = CacheBuilder.newBuilder().expireAfterAccess(5, TimeUnit.MINUTES).build();
     private EntityJoinCallbackEvent() {}
     public static void register() { if (!PlatformAPI.isServer()) NeoForge.EVENT_BUS.addListener(EntityJoinCallbackEvent::onJoin); }
     private static void onJoin(EntityJoinLevelEvent event) {

@@ -14,7 +14,7 @@ import rip.ysm.api.client.KeyMappingFactory;
 
 @EventBusSubscriber(modid = YesSteveModel.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
 public final class ExtraPlayerRenderKey {
-    public static final KeyMapping KEY_MAPPING = KeyMappingFactory.createInGameNone("key.yes_steve_model.extra_player_render.desc", InputConstants.Type.KEYSYM, 80, "key.category.yes_steve_model");
+    public static final KeyMapping KEY_MAPPING = KeyMappingFactory.createInGameNone("key.yes_steve_model.open_extra_player_render.desc", InputConstants.Type.KEYSYM, 80, "key.category.yes_steve_model");
     private ExtraPlayerRenderKey() {} public static void register() {}
     @SubscribeEvent public static void onKey(InputEvent.Key event) { if (!PlatformAPI.isServer() && InputUtil.isPlayerReady() && event.getAction() == 1 && InputUtil.isKeyPressed(event.getKey(), event.getScanCode(), KEY_MAPPING) && YesSteveModel.isAvailable()) Minecraft.getInstance().setScreen(new ExtraPlayerRenderScreen()); }
 }

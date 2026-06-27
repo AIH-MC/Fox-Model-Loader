@@ -1,6 +1,5 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.client.ClientModelManager;
 import net.minecraft.network.FriendlyByteBuf;
 import rip.ysm.api.network.PacketContext;
 
@@ -8,7 +7,7 @@ import java.nio.ByteBuffer;
 
 public class S2CModelSyncPayload {
 
-    private final ByteBuffer data;
+    final ByteBuffer data;
 
     public S2CModelSyncPayload(ByteBuffer data) {
         this.data = data;
@@ -27,7 +26,7 @@ public class S2CModelSyncPayload {
 
     public static void handle(S2CModelSyncPayload message, PacketContext ctx) {
         if (ctx.isClientSide()) {
-            ClientModelManager.startSync(ctx.getConnection(), message.data);
+            ClientPacketHandler.handleModelSyncPayload(message, ctx);
         }
     }
 }

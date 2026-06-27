@@ -649,6 +649,7 @@
   "gui.yes_steve_model.url.donate": "Пожертвовать",
   "gui.yes_steve_model.url.home": "Главная страница",
   "key.category.yes_steve_model": "Fox Model Loader",
+  "key.category.yes_steve_model.keys": "Fox Model Loader",
   "key.yes_steve_model.animation_roulette.desc": "Открыть рулетку анимаций",
   "key.yes_steve_model.debug_animation.desc": "Открыть меню отладки анимаций",
   "key.yes_steve_model.extra_animation.0.desc": "Воспроизвести доп. анимацию 0",

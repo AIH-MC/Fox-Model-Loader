@@ -17,6 +17,14 @@ public final class YesSteveModelNeoForgeClient {
     @SubscribeEvent public static void onClientSetup(FMLClientSetupEvent event) {
         debugOverlay = AnimationDebugOverlay.createOverlay(); loadingOverlay = new ExtraPlayerOverlay(); syncOverlay = new ModelSyncStateOverlay();
         ClientModelManager.loadDefaultModel();
+        ClientModelManager.reloadLocalModels(null);
+        com.elfmcys.yesstevemodel.network.NetworkHandler.clientConnectionChecker = () -> {
+            net.minecraft.client.multiplayer.ClientPacketListener connection = Minecraft.getInstance().getConnection();
+            if (connection == null) {
+                return false;
+            }
+            return com.elfmcys.yesstevemodel.network.NetworkHandler.isConnectionValid(connection.getConnection());
+        };
     }
 
     @EventBusSubscriber(modid = com.elfmcys.yesstevemodel.YesSteveModel.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)

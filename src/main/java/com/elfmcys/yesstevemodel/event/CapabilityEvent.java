@@ -21,6 +21,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
 
 public final class CapabilityEvent {
     private static final ConcurrentMap<UUID, ConcurrentMap<UUID, String>> SYNCED_PLAYER_MODEL_STATES = new ConcurrentHashMap<>();
@@ -30,6 +31,8 @@ public final class CapabilityEvent {
         NeoForge.EVENT_BUS.addListener(CapabilityEvent::onPlayerQuit);
         NeoForge.EVENT_BUS.addListener(CapabilityEvent::onEntityAdd);
         NeoForge.EVENT_BUS.addListener(CapabilityEvent::onServerTick);
+        NeoForge.EVENT_BUS.addListener(CapabilityEvent::onPlayerChangedDimension);
+        NeoForge.EVENT_BUS.addListener(CapabilityEvent::onPlayerStartTracking);
     }
     private static void onPlayerCloned(PlayerEvent.Clone event) {
         if (!YesSteveModel.isAvailable()) return;
@@ -41,12 +44,51 @@ public final class CapabilityEvent {
         getStarModelsCap(old).ifPresent(oc -> getStarModelsCap(neo).ifPresent(nc -> nc.copyFrom(oc)));
         CapabilityLifecycle.invalidate(old);
     }
+    
+    private static void onPlayerStartTracking(PlayerEvent.StartTracking event) {
+        if (!YesSteveModel.isAvailable()) return;
+        if (event.getTarget() instanceof ServerPlayer targetPlayer) {
+            ServerPlayer tracker = (ServerPlayer) event.getEntity();
+            getModelInfoCap(targetPlayer).ifPresent(c -> {
+                c.createSyncMessage(targetPlayer, false).ifPresent(m -> NetworkHandler.sendToClientPlayer(m, tracker));
+            });
+        }
+    }
     private static void onPlayerQuit(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer p)) return;
         SYNCED_PLAYER_MODEL_STATES.remove(p.getUUID());
         SYNCED_PLAYER_MODEL_STATES.values().forEach(s -> s.remove(p.getUUID()));
     }
     public static void forgetSyncedModelStates(ServerPlayer r) { SYNCED_PLAYER_MODEL_STATES.remove(r.getUUID()); }
+    /**
+     * Called when a player travels through a portal and changes dimension.
+     * The traveling player's client tears down and rebuilds its entire world,
+     * so all model sync state for that player becomes stale.
+     * We clear caches in both directions and force a full re-sync.
+     */
+    private static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer traveler)) return;
+        onPlayerChangedDimensionInternal(traveler);
+    }
+    public static void onPlayerChangedDimensionInternal(ServerPlayer traveler) {
+        if (!YesSteveModel.isAvailable()) return;
+        MinecraftServer s = traveler.serverLevel().getServer(); if (s == null) return;
+        UUID travelerId = traveler.getUUID();
+        // 1. Clear ALL model states cached for traveler as receiver — their client rebuilt its world.
+        SYNCED_PLAYER_MODEL_STATES.remove(travelerId);
+        // 2. Clear traveler as source from every other receiver — force re-send of traveler's model to all.
+        SYNCED_PLAYER_MODEL_STATES.values().forEach(m -> m.remove(travelerId));
+        // 3. Re-send every connected player's model to the traveler.
+        for (ServerPlayer p : s.getPlayerList().getPlayers()) {
+            if (p == traveler) continue;
+            getModelInfoCap(p).ifPresent(c -> {
+                if (!canSyncModel(p, c)) return;
+                c.createSyncMessage(p, false).ifPresent(m -> NetworkHandler.sendToClientPlayer(m, traveler));
+            });
+        }
+        // 4. Mark traveler's own model dirty so it gets re-sent to all others on the next tick.
+        getModelInfoCap(traveler).ifPresent(ModelInfoCapability::markDirty);
+    }
     private static void onEntityAdd(EntityJoinLevelEvent event) {
         Entity e = event.getEntity(); Level l = event.getLevel();
         if (!YesSteveModel.isAvailable()) return;

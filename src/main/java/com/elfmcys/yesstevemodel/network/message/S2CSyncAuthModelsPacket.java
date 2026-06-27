@@ -1,8 +1,6 @@
 package com.elfmcys.yesstevemodel.network.message;
 
-import com.elfmcys.yesstevemodel.capability.AuthModelsCapability;
 import com.google.common.collect.Sets;
-import net.neoforged.api.distmarker.Dist;import net.neoforged.api.distmarker.OnlyIn;import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import rip.ysm.api.network.PacketContext;
 
@@ -11,7 +9,7 @@ import java.util.Set;
 
 public class S2CSyncAuthModelsPacket {
 
-    private final Set<String> authModels;
+    final Set<String> authModels;
 
     public S2CSyncAuthModelsPacket(Set<String> authModels) {
         this.authModels = authModels;
@@ -35,18 +33,7 @@ public class S2CSyncAuthModelsPacket {
 
     public static void handle(S2CSyncAuthModelsPacket message, PacketContext ctx) {
         if (ctx.isClientSide()) {
-            ctx.enqueueWork(() -> handleCapability(message));
-        }
-    }
-
-
-    @OnlyIn(Dist.CLIENT)
-    public static void handleCapability(S2CSyncAuthModelsPacket message) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null) {
-            AuthModelsCapability.get(minecraft.player).ifPresent(cap -> {
-                cap.setAuthModels(message.authModels);
-            });
+            ctx.enqueueWork(() -> ClientPacketHandler.handleSyncAuthModels(message));
         }
     }
 }
